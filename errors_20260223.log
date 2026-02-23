@@ -295,3 +295,29 @@
 2026-02-23 15:55:52,782 - INFO - [Juridique_Immo_92] Doublon supprimé: SELARL & Associés 14 (92300)
 2026-02-23 15:55:52,782 - INFO - [Juridique_Immo_92] Doublon supprimé: Cabinet immobilier Patrimoine 15 (92140)
 2026-02-23 15:55:52,782 - INFO - [Juridique_Immo_92] Doublon supprimé: SCP Conseils 18 (92130)
+2026-02-23 15:56:17,365 - WARNING - Timeout page 1 — centre d'appels/Lille
+2026-02-23 15:56:39,294 - WARNING - Timeout page 1 — centre d'appels/Roubaix
+2026-02-23 15:57:01,022 - WARNING - Timeout page 1 — centre d'appels/Tourcoing
+2026-02-23 15:57:22,801 - WARNING - Timeout page 1 — centre d'appels/Villeneuve-d'Ascq
+2026-02-23 15:57:44,071 - WARNING - Timeout page 1 — centre d'appels/Valenciennes
+2026-02-23 15:58:05,094 - WARNING - Timeout page 1 — call center/Lille
+2026-02-23 15:58:26,604 - WARNING - Timeout page 1 — call center/Roubaix
+2026-02-23 15:58:48,247 - WARNING - Timeout page 1 — call center/Tourcoing
+2026-02-23 15:59:09,330 - WARNING - Timeout page 1 — call center/Villeneuve-d'Ascq
+2026-02-23 15:59:30,692 - WARNING - Timeout page 1 — call center/Valenciennes
+2026-02-23 15:59:51,986 - WARNING - Timeout page 1 — télémarketing/Lille
+2026-02-23 16:00:13,097 - WARNING - Timeout page 1 — télémarketing/Roubaix
+2026-02-23 16:00:34,260 - WARNING - Timeout page 1 — télémarketing/Tourcoing
+2026-02-23 16:00:55,544 - WARNING - Timeout page 1 — télémarketing/Villeneuve-d'Ascq
+2026-02-23 16:01:16,656 - WARNING - Timeout page 1 — télémarketing/Valenciennes
+2026-02-23 16:01:37,968 - WARNING - Timeout page 1 — service client externalisé/Lille
+2026-02-23 16:01:59,291 - WARNING - Timeout page 1 — service client externalisé/Roubaix
+2026-02-23 16:02:20,690 - WARNING - Timeout page 1 — service client externalisé/Tourcoing
+2026-02-23 16:02:42,152 - WARNING - Timeout page 1 — service client externalisé/Villeneuve-d'Ascq
+2026-02-23 16:03:03,826 - WARNING - Timeout page 1 — service client externalisé/Valenciennes
+2026-02-23 16:03:25,154 - WARNING - Timeout page 1 — BPO/Lille
+2026-02-23 16:03:46,581 - WARNING - Timeout page 1 — BPO/Roubaix
+2026-02-23 16:04:08,452 - WARNING - Timeout page 1 — BPO/Tourcoing
+2026-02-23 16:04:30,213 - WARNING - Timeout page 1 — BPO/Villeneuve-d'Ascq
+2026-02-23 16:04:51,381 - WARNING - Timeout page 1 — BPO/Valenciennes
+2026-02-23 16:12:53,200 - INFO - [CallCenter_59] Doublon supprimé: Arvato France (59200)
