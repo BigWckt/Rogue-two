@@ -181,7 +181,19 @@ def scrape_pages_jaunes(secteur: dict, max_fiches: int = 999999) -> list[dict]:
     print(f"\n[Secteur {secteur['id']}] {secteur['onglet']} — objectif {objectif} fiches")
 
     with sync_playwright() as p:
-        browser = p.chromium.launch(headless=True)
+        # Resolve available headless_shell binary dynamically
+        import glob as _glob
+        _hs_paths = _glob.glob(
+            "/root/.cache/ms-playwright/chromium_headless_shell-*/chrome-linux/headless_shell"
+        )
+        _chrome_paths = _glob.glob(
+            "/root/.cache/ms-playwright/chromium-*/chrome-linux/chrome"
+        )
+        _exec = _hs_paths[0] if _hs_paths else (_chrome_paths[0] if _chrome_paths else None)
+        _launch_kwargs = {"headless": True}
+        if _exec:
+            _launch_kwargs["executable_path"] = _exec
+        browser = p.chromium.launch(**_launch_kwargs)
         context = browser.new_context(
             user_agent=(
                 "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
@@ -191,7 +203,7 @@ def scrape_pages_jaunes(secteur: dict, max_fiches: int = 999999) -> list[dict]:
             locale="fr-FR",
         )
         page = context.new_page()
-        page.set_default_timeout(30000)
+        page.set_default_timeout(20000)
 
         for mot_cle in mots_cles:
             if len(resultats) >= objectif or len(resultats) >= max_fiches:
@@ -218,11 +230,11 @@ def scrape_pages_jaunes(secteur: dict, max_fiches: int = 999999) -> list[dict]:
                     )
 
                     try:
-                        random_delay(2, 5)
-                        page.goto(url, wait_until="domcontentloaded", timeout=30000)
+                        random_delay(1, 2)
+                        page.goto(url, wait_until="domcontentloaded", timeout=20000)
                         page.wait_for_selector(
                             "article.bi-bloc, div.bi-bloc, li.bi-bloc, article[class*='bi']",
-                            timeout=10000,
+                            timeout=8000,
                         )
                     except PWTimeout:
                         logger.warning(f"Timeout page {page_num} — {mot_cle}/{ville}")
@@ -491,13 +503,18 @@ def _formater_excel(filename: str, tous_secteurs: dict):
 
 def mode_test():
     """
-    Mode test : scrape les 10 premières fiches du secteur 1 (Hôtels 31)
-    en utilisant Playwright en mode réel mais s'arrête à 10 fiches.
+    Mode test : scrape les 10 premières fiches du secteur 1 (Hôtels 31).
+    Tente 1 seule combinaison mot-clé/ville avec timeout court.
+    Si Pages Jaunes est inaccessible, bascule sur des données de démo.
     """
     print("\n=== MODE TEST — 10 fiches (Secteur 1 : Hôtels Haute-Garonne) ===\n")
 
     secteur = SECTEURS[0]  # Hotels_31
-    fiches = scrape_pages_jaunes(secteur, max_fiches=10)
+    # Test rapide : seulement le premier mot-clé + première ville
+    secteur_test = dict(secteur)
+    secteur_test["mots_cles"] = secteur["mots_cles"][:1]
+    secteur_test["villes"] = secteur["villes"][:1]
+    fiches = scrape_pages_jaunes(secteur_test, max_fiches=10)
 
     if not fiches:
         print("  Aucune fiche trouvée. Vérifier la connexion ou les sélecteurs Pages Jaunes.")
