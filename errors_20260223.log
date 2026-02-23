@@ -256,3 +256,42 @@
 2026-02-23 15:34:58,083 - INFO - [Hotels_59] Doublon supprimé: Hôtel Batignolles 15 (59650)
 2026-02-23 15:34:58,083 - INFO - [Hotels_59] Doublon supprimé: Hôtel du Grands Boulevards 15 (59600)
 2026-02-23 15:34:58,083 - INFO - [Hotels_59] Doublon supprimé: Hôtel de la Madeleine 15 (59100)
+2026-02-23 15:35:22,342 - WARNING - Timeout page 1 — cabinet d'avocats/Nanterre
+2026-02-23 15:35:44,088 - WARNING - Timeout page 1 — cabinet d'avocats/Boulogne-Billancourt
+2026-02-23 15:36:05,777 - WARNING - Timeout page 1 — cabinet d'avocats/Neuilly-sur-Seine
+2026-02-23 15:36:27,541 - WARNING - Timeout page 1 — cabinet d'avocats/Issy-les-Moulineaux
+2026-02-23 15:36:49,129 - WARNING - Timeout page 1 — cabinet d'avocats/Levallois-Perret
+2026-02-23 15:37:10,367 - WARNING - Timeout page 1 — cabinet d'avocats/Courbevoie
+2026-02-23 15:37:31,901 - WARNING - Timeout page 1 — cabinet d'avocats/Asnières-sur-Seine
+2026-02-23 15:37:53,804 - WARNING - Timeout page 1 — étude notariale/Nanterre
+2026-02-23 15:38:15,089 - WARNING - Timeout page 1 — étude notariale/Boulogne-Billancourt
+2026-02-23 15:38:36,333 - WARNING - Timeout page 1 — étude notariale/Neuilly-sur-Seine
+2026-02-23 15:38:58,089 - WARNING - Timeout page 1 — étude notariale/Issy-les-Moulineaux
+2026-02-23 15:39:19,518 - WARNING - Timeout page 1 — étude notariale/Levallois-Perret
+2026-02-23 15:39:41,097 - WARNING - Timeout page 1 — étude notariale/Courbevoie
+2026-02-23 15:40:02,480 - WARNING - Timeout page 1 — étude notariale/Asnières-sur-Seine
+2026-02-23 15:40:24,477 - WARNING - Timeout page 1 — agence immobilière/Nanterre
+2026-02-23 15:40:46,100 - WARNING - Timeout page 1 — agence immobilière/Boulogne-Billancourt
+2026-02-23 15:41:07,464 - WARNING - Timeout page 1 — agence immobilière/Neuilly-sur-Seine
+2026-02-23 15:41:29,146 - WARNING - Timeout page 1 — agence immobilière/Issy-les-Moulineaux
+2026-02-23 15:41:50,190 - WARNING - Timeout page 1 — agence immobilière/Levallois-Perret
+2026-02-23 15:42:12,009 - WARNING - Timeout page 1 — agence immobilière/Courbevoie
+2026-02-23 15:42:33,942 - WARNING - Timeout page 1 — agence immobilière/Asnières-sur-Seine
+2026-02-23 15:42:55,675 - WARNING - Timeout page 1 — administrateur de biens/Nanterre
+2026-02-23 15:43:17,652 - WARNING - Timeout page 1 — administrateur de biens/Boulogne-Billancourt
+2026-02-23 15:43:38,995 - WARNING - Timeout page 1 — administrateur de biens/Neuilly-sur-Seine
+2026-02-23 15:44:00,375 - WARNING - Timeout page 1 — administrateur de biens/Issy-les-Moulineaux
+2026-02-23 15:44:21,840 - WARNING - Timeout page 1 — administrateur de biens/Levallois-Perret
+2026-02-23 15:44:43,419 - WARNING - Timeout page 1 — administrateur de biens/Courbevoie
+2026-02-23 15:45:04,677 - WARNING - Timeout page 1 — administrateur de biens/Asnières-sur-Seine
+2026-02-23 15:45:26,480 - WARNING - Timeout page 1 — promoteur immobilier/Nanterre
+2026-02-23 15:45:47,569 - WARNING - Timeout page 1 — promoteur immobilier/Boulogne-Billancourt
+2026-02-23 15:46:09,349 - WARNING - Timeout page 1 — promoteur immobilier/Neuilly-sur-Seine
+2026-02-23 15:46:30,976 - WARNING - Timeout page 1 — promoteur immobilier/Issy-les-Moulineaux
+2026-02-23 15:46:52,052 - WARNING - Timeout page 1 — promoteur immobilier/Levallois-Perret
+2026-02-23 15:47:13,835 - WARNING - Timeout page 1 — promoteur immobilier/Courbevoie
+2026-02-23 15:47:34,996 - WARNING - Timeout page 1 — promoteur immobilier/Asnières-sur-Seine
+2026-02-23 15:55:52,782 - INFO - [Juridique_Immo_92] Doublon supprimé: Cabinet Expertises 12 (92000)
+2026-02-23 15:55:52,782 - INFO - [Juridique_Immo_92] Doublon supprimé: SELARL & Associés 14 (92300)
+2026-02-23 15:55:52,782 - INFO - [Juridique_Immo_92] Doublon supprimé: Cabinet immobilier Patrimoine 15 (92140)
+2026-02-23 15:55:52,782 - INFO - [Juridique_Immo_92] Doublon supprimé: SCP Conseils 18 (92130)
