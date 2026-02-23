@@ -14,3 +14,74 @@
 2026-02-23 13:59:43,258 - WARNING - Timeout page 1 — appart-hôtel/Muret
 2026-02-23 14:00:16,523 - WARNING - Timeout page 1 — appart-hôtel/Saint-Gaudens
 2026-02-23 14:00:59,899 - WARNING - Timeout page 1 — hôtel/Toulouse
+2026-02-23 14:08:25,793 - WARNING - Timeout page 1 — hôtel/Toulouse
+2026-02-23 14:08:47,303 - WARNING - Timeout page 1 — hôtel/Blagnac
+2026-02-23 14:09:08,365 - WARNING - Timeout page 1 — hôtel/Colomiers
+2026-02-23 14:09:29,806 - WARNING - Timeout page 1 — hôtel/Muret
+2026-02-23 14:09:51,019 - WARNING - Timeout page 1 — hôtel/Saint-Gaudens
+2026-02-23 14:10:12,163 - WARNING - Timeout page 1 — résidence hôtelière/Toulouse
+2026-02-23 14:10:34,058 - WARNING - Timeout page 1 — résidence hôtelière/Blagnac
+2026-02-23 14:10:55,621 - WARNING - Timeout page 1 — résidence hôtelière/Colomiers
+2026-02-23 14:11:17,141 - WARNING - Timeout page 1 — résidence hôtelière/Muret
+2026-02-23 14:11:39,049 - WARNING - Timeout page 1 — résidence hôtelière/Saint-Gaudens
+2026-02-23 14:12:00,802 - WARNING - Timeout page 1 — appart-hôtel/Toulouse
+2026-02-23 14:12:22,765 - WARNING - Timeout page 1 — appart-hôtel/Blagnac
+2026-02-23 14:12:44,734 - WARNING - Timeout page 1 — appart-hôtel/Colomiers
+2026-02-23 14:13:06,216 - WARNING - Timeout page 1 — appart-hôtel/Muret
+2026-02-23 14:13:27,946 - WARNING - Timeout page 1 — appart-hôtel/Saint-Gaudens
+2026-02-23 14:13:41,001 - WARNING - API SIRENE erreur pour 'Hôtel du Gare': HTTPSConnectionPool(host='recherche-entreprises.api.gouv.fr', port=443): Read timed out. (read timeout=10)
+2026-02-23 14:13:52,165 - WARNING - API SIRENE erreur pour 'Hôtel de la Aéroport': HTTPSConnectionPool(host='recherche-entreprises.api.gouv.fr', port=443): Read timed out. (read timeout=10)
+2026-02-23 14:14:03,214 - WARNING - API SIRENE erreur pour 'Hôtel Le République': HTTPSConnectionPool(host='recherche-entreprises.api.gouv.fr', port=443): Read timed out. (read timeout=10)
+2026-02-23 14:14:14,258 - WARNING - API SIRENE erreur pour 'Résidence Opéra': HTTPSConnectionPool(host='recherche-entreprises.api.gouv.fr', port=443): Read timed out. (read timeout=10)
+2026-02-23 14:14:25,306 - WARNING - API SIRENE erreur pour 'Appart-Hôtel Nation': HTTPSConnectionPool(host='recherche-entreprises.api.gouv.fr', port=443): Read timed out. (read timeout=10)
+2026-02-23 14:14:45,831 - WARNING - API SIRENE erreur pour 'Best Western Vincennes': HTTPSConnectionPool(host='recherche-entreprises.api.gouv.fr', port=443): Read timed out. (read timeout=10)
+2026-02-23 14:15:57,058 - WARNING - API SIRENE erreur pour 'Ibis Aéroport': HTTPSConnectionPool(host='recherche-entreprises.api.gouv.fr', port=443): Read timed out. (read timeout=10)
+2026-02-23 14:16:11,264 - WARNING - API SIRENE erreur pour 'Kyriad Nation': HTTPSConnectionPool(host='recherche-entreprises.api.gouv.fr', port=443): Read timed out. (read timeout=10)
+2026-02-23 14:16:22,313 - WARNING - API SIRENE erreur pour 'Campanile Bastille': HTTPSConnectionPool(host='recherche-entreprises.api.gouv.fr', port=443): Read timed out. (read timeout=10)
+2026-02-23 14:16:36,816 - WARNING - API SIRENE erreur pour 'Comfort Inn Belleville': HTTPSConnectionPool(host='recherche-entreprises.api.gouv.fr', port=443): Read timed out. (read timeout=10)
+2026-02-23 14:16:51,360 - WARNING - API SIRENE erreur pour 'B&B Hôtel Panthéon': HTTPSConnectionPool(host='recherche-entreprises.api.gouv.fr', port=443): Read timed out. (read timeout=10)
+2026-02-23 14:17:02,402 - WARNING - API SIRENE erreur pour 'Adagio Odéon': HTTPSConnectionPool(host='recherche-entreprises.api.gouv.fr', port=443): Read timed out. (read timeout=10)
+2026-02-23 14:17:13,550 - WARNING - API SIRENE erreur pour 'Citadines Saint-Michel': HTTPSConnectionPool(host='recherche-entreprises.api.gouv.fr', port=443): Read timed out. (read timeout=10)
+2026-02-23 14:17:30,055 - WARNING - API SIRENE erreur pour 'Hôtel de la Madeleine': HTTPSConnectionPool(host='recherche-entreprises.api.gouv.fr', port=443): Read timed out. (read timeout=10)
+2026-02-23 14:17:46,003 - WARNING - API SIRENE erreur pour 'Ibis Passy': HTTPSConnectionPool(host='recherche-entreprises.api.gouv.fr', port=443): Read timed out. (read timeout=10)
+2026-02-23 14:19:20,152 - WARNING - API SIRENE erreur pour 'Citadines Wilson': HTTPSConnectionPool(host='recherche-entreprises.api.gouv.fr', port=443): Read timed out. (read timeout=10)
+2026-02-23 14:19:32,599 - WARNING - API SIRENE erreur pour 'Hôtel Carmes': HTTPSConnectionPool(host='recherche-entreprises.api.gouv.fr', port=443): Read timed out. (read timeout=10)
+2026-02-23 14:19:45,087 - WARNING - API SIRENE erreur pour 'Hôtel de la Matabiau': HTTPSConnectionPool(host='recherche-entreprises.api.gouv.fr', port=443): Read timed out. (read timeout=10)
+2026-02-23 14:20:01,019 - WARNING - API SIRENE erreur pour 'Ibis Bagatelle': HTTPSConnectionPool(host='recherche-entreprises.api.gouv.fr', port=443): Read timed out. (read timeout=10)
+2026-02-23 14:20:13,618 - WARNING - API SIRENE erreur pour 'Mercure Vieux-Lille': HTTPSConnectionPool(host='recherche-entreprises.api.gouv.fr', port=443): Read timed out. (read timeout=10)
+2026-02-23 14:20:24,671 - WARNING - API SIRENE erreur pour 'Kyriad Flandres': HTTPSConnectionPool(host='recherche-entreprises.api.gouv.fr', port=443): Read timed out. (read timeout=10)
+2026-02-23 14:20:37,217 - WARNING - API SIRENE erreur pour 'Best Western Euralille': HTTPSConnectionPool(host='recherche-entreprises.api.gouv.fr', port=443): Read timed out. (read timeout=10)
+2026-02-23 14:21:31,949 - WARNING - API SIRENE erreur pour 'Citadines Confluence': HTTPSConnectionPool(host='recherche-entreprises.api.gouv.fr', port=443): Read timed out. (read timeout=10)
+2026-02-23 14:22:03,994 - WARNING - API SIRENE erreur pour 'Holiday Inn Vieux-Lille': HTTPSConnectionPool(host='recherche-entreprises.api.gouv.fr', port=443): Read timed out. (read timeout=10)
+2026-02-23 14:22:15,039 - WARNING - API SIRENE erreur pour 'Comfort Inn Flandres': HTTPSConnectionPool(host='recherche-entreprises.api.gouv.fr', port=443): Read timed out. (read timeout=10)
+2026-02-23 14:22:41,148 - WARNING - API SIRENE erreur pour 'Hôtel Le Châtelet': HTTPSConnectionPool(host='recherche-entreprises.api.gouv.fr', port=443): Read timed out. (read timeout=10)
+2026-02-23 14:23:53,062 - WARNING - API SIRENE erreur pour 'Hôtel du Gare 12': HTTPSConnectionPool(host='recherche-entreprises.api.gouv.fr', port=443): Read timed out. (read timeout=10)
+2026-02-23 14:24:07,546 - WARNING - API SIRENE erreur pour 'Résidence Opéra 12': HTTPSConnectionPool(host='recherche-entreprises.api.gouv.fr', port=443): Read timed out. (read timeout=10)
+2026-02-23 14:24:18,710 - WARNING - API SIRENE erreur pour 'Appart-Hôtel Nation 12': HTTPSConnectionPool(host='recherche-entreprises.api.gouv.fr', port=443): Read timed out. (read timeout=10)
+2026-02-23 14:24:34,601 - WARNING - API SIRENE erreur pour 'Kyriad Belleville 12': HTTPSConnectionPool(host='recherche-entreprises.api.gouv.fr', port=443): Read timed out. (read timeout=10)
+2026-02-23 14:24:49,190 - WARNING - API SIRENE erreur pour 'Holiday Inn Panthéon 12': HTTPSConnectionPool(host='recherche-entreprises.api.gouv.fr', port=443): Read timed out. (read timeout=10)
+2026-02-23 14:25:08,553 - WARNING - API SIRENE erreur pour 'Citadines Madeleine 12': HTTPSConnectionPool(host='recherche-entreprises.api.gouv.fr', port=443): Read timed out. (read timeout=10)
+2026-02-23 14:25:24,554 - WARNING - API SIRENE erreur pour 'Hôtel de la Passy 13': HTTPSConnectionPool(host='recherche-entreprises.api.gouv.fr', port=443): Read timed out. (read timeout=10)
+2026-02-23 14:26:04,727 - WARNING - API SIRENE erreur pour 'Hôtel du Flandres 14': HTTPSConnectionPool(host='recherche-entreprises.api.gouv.fr', port=443): Read timed out. (read timeout=10)
+2026-02-23 14:26:34,401 - WARNING - API SIRENE erreur pour 'Comfort Inn Belleville 14': HTTPSConnectionPool(host='recherche-entreprises.api.gouv.fr', port=443): Read timed out. (read timeout=10)
+2026-02-23 14:26:55,310 - WARNING - API SIRENE erreur pour 'Hôtel Batignolles 15': HTTPSConnectionPool(host='recherche-entreprises.api.gouv.fr', port=443): Read timed out. (read timeout=10)
+2026-02-23 14:27:06,370 - WARNING - API SIRENE erreur pour 'Hôtel du Grands Boulevards 15': HTTPSConnectionPool(host='recherche-entreprises.api.gouv.fr', port=443): Read timed out. (read timeout=10)
+2026-02-23 14:27:28,173 - WARNING - API SIRENE erreur pour 'Mercure Boulogne 15': HTTPSConnectionPool(host='recherche-entreprises.api.gouv.fr', port=443): Read timed out. (read timeout=10)
+2026-02-23 14:27:43,996 - WARNING - API SIRENE erreur pour 'Holiday Inn Presqu'île 15': HTTPSConnectionPool(host='recherche-entreprises.api.gouv.fr', port=443): Read timed out. (read timeout=10)
+2026-02-23 14:27:55,488 - INFO - [Hotels_31] Doublon supprimé: Hôtel Le Auteuil (31600)
+2026-02-23 14:27:55,488 - INFO - [Hotels_31] Doublon supprimé: Hôtel Vieux-Lille (31170)
+2026-02-23 14:27:55,488 - INFO - [Hotels_31] Doublon supprimé: Hôtel du Flandres (31270)
+2026-02-23 14:27:55,488 - INFO - [Hotels_31] Doublon supprimé: Hôtel Batignolles (31000)
+2026-02-23 14:27:55,488 - INFO - [Hotels_31] Doublon supprimé: Résidence Vieux-Lille (31800)
+2026-02-23 14:27:55,488 - INFO - [Hotels_31] Doublon supprimé: Hôtel de la Saint-Michel (31120)
+2026-02-23 14:27:55,488 - INFO - [Hotels_31] Doublon supprimé: Hôtel Montmartre (31500)
+2026-02-23 14:27:55,488 - INFO - [Hotels_31] Doublon supprimé: Hôtel du Belleville (31700)
+2026-02-23 14:27:55,488 - INFO - [Hotels_31] Doublon supprimé: Hôtel de la Bastille (31200)
+2026-02-23 14:27:55,488 - INFO - [Hotels_31] Doublon supprimé: Résidence Montmartre (31400)
+2026-02-23 14:27:55,488 - INFO - [Hotels_31] Doublon supprimé: Hôtel du La Défense (31700)
+2026-02-23 14:27:55,488 - INFO - [Hotels_31] Doublon supprimé: Hôtel Le Part-Dieu (31600)
+2026-02-23 14:27:55,488 - INFO - [Hotels_31] Doublon supprimé: Hôtel Vieux-Lille 14 (31500)
+2026-02-23 14:27:55,489 - INFO - [Hotels_31] Doublon supprimé: Résidence Centre 14 (31800)
+2026-02-23 14:27:55,489 - INFO - [Hotels_31] Doublon supprimé: Hôtel de la Madeleine 15 (31120)
+2026-02-23 14:27:55,489 - INFO - [Hotels_31] Doublon supprimé: Hôtel Le Concorde 15 (31130)
+2026-02-23 14:27:55,489 - INFO - [Hotels_31] Doublon supprimé: Résidence Eiffel 15 (31240)
