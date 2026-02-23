@@ -153,3 +153,65 @@
 2026-02-23 14:58:57,103 - INFO - [Hotels_75] Doublon supprimé: Hôtel du Flandres 14 (75002)
 2026-02-23 14:58:57,104 - INFO - [Hotels_75] Doublon supprimé: Hôtel du Grands Boulevards 15 (75002)
 2026-02-23 14:58:57,104 - INFO - [Hotels_75] Doublon supprimé: Hôtel Le Concorde 15 (75004)
+2026-02-23 14:59:24,719 - WARNING - Timeout page 1 — hôtel/Saint-Denis
+2026-02-23 14:59:46,697 - WARNING - Timeout page 1 — hôtel/Bobigny
+2026-02-23 15:00:07,779 - WARNING - Timeout page 1 — hôtel/Montreuil
+2026-02-23 15:00:29,288 - WARNING - Timeout page 1 — hôtel/Aubervilliers
+2026-02-23 15:00:51,090 - WARNING - Timeout page 1 — hôtel/Pantin
+2026-02-23 15:01:12,854 - WARNING - Timeout page 1 — hôtel/Créteil
+2026-02-23 15:01:33,950 - WARNING - Timeout page 1 — hôtel/Vincennes
+2026-02-23 15:01:55,288 - WARNING - Timeout page 1 — hôtel/Vitry-sur-Seine
+2026-02-23 15:02:17,253 - WARNING - Timeout page 1 — hôtel/Ivry-sur-Seine
+2026-02-23 15:02:38,972 - WARNING - Timeout page 1 — hôtel/Champigny-sur-Marne
+2026-02-23 15:03:00,208 - WARNING - Timeout page 1 — résidence hôtelière/Saint-Denis
+2026-02-23 15:03:21,500 - WARNING - Timeout page 1 — résidence hôtelière/Bobigny
+2026-02-23 15:03:42,706 - WARNING - Timeout page 1 — résidence hôtelière/Montreuil
+2026-02-23 15:04:04,464 - WARNING - Timeout page 1 — résidence hôtelière/Aubervilliers
+2026-02-23 15:04:25,793 - WARNING - Timeout page 1 — résidence hôtelière/Pantin
+2026-02-23 15:04:46,999 - WARNING - Timeout page 1 — résidence hôtelière/Créteil
+2026-02-23 15:05:08,583 - WARNING - Timeout page 1 — résidence hôtelière/Vincennes
+2026-02-23 15:05:29,622 - WARNING - Timeout page 1 — résidence hôtelière/Vitry-sur-Seine
+2026-02-23 15:05:50,905 - WARNING - Timeout page 1 — résidence hôtelière/Ivry-sur-Seine
+2026-02-23 15:06:12,751 - WARNING - Timeout page 1 — résidence hôtelière/Champigny-sur-Marne
+2026-02-23 15:06:34,337 - WARNING - Timeout page 1 — appart-hôtel/Saint-Denis
+2026-02-23 15:06:55,430 - WARNING - Timeout page 1 — appart-hôtel/Bobigny
+2026-02-23 15:07:17,389 - WARNING - Timeout page 1 — appart-hôtel/Montreuil
+2026-02-23 15:07:38,695 - WARNING - Timeout page 1 — appart-hôtel/Aubervilliers
+2026-02-23 15:08:00,506 - WARNING - Timeout page 1 — appart-hôtel/Pantin
+2026-02-23 15:08:22,302 - WARNING - Timeout page 1 — appart-hôtel/Créteil
+2026-02-23 15:08:43,984 - WARNING - Timeout page 1 — appart-hôtel/Vincennes
+2026-02-23 15:09:05,064 - WARNING - Timeout page 1 — appart-hôtel/Vitry-sur-Seine
+2026-02-23 15:09:26,826 - WARNING - Timeout page 1 — appart-hôtel/Ivry-sur-Seine
+2026-02-23 15:09:48,261 - WARNING - Timeout page 1 — appart-hôtel/Champigny-sur-Marne
+2026-02-23 15:18:05,921 - INFO - [Hotels_93-94] Doublon supprimé: Hôtel Le Auteuil (93600)
+2026-02-23 15:18:05,921 - INFO - [Hotels_93-94] Doublon supprimé: Résidence Boulogne (94000)
+2026-02-23 15:18:05,921 - INFO - [Hotels_93-94] Doublon supprimé: Hôtel Vieux-Lille (94000)
+2026-02-23 15:18:05,922 - INFO - [Hotels_93-94] Doublon supprimé: Hôtel du Flandres (94300)
+2026-02-23 15:18:05,922 - INFO - [Hotels_93-94] Doublon supprimé: Hôtel Batignolles (94500)
+2026-02-23 15:18:05,922 - INFO - [Hotels_93-94] Doublon supprimé: Hôtel du Grands Boulevards (94100)
+2026-02-23 15:18:05,922 - INFO - [Hotels_93-94] Doublon supprimé: Hôtel de la Madeleine (94140)
+2026-02-23 15:18:05,922 - INFO - [Hotels_93-94] Doublon supprimé: Hôtel Le Concorde (94700)
+2026-02-23 15:18:05,922 - INFO - [Hotels_93-94] Doublon supprimé: Résidence Vieux-Lille (93500)
+2026-02-23 15:18:05,922 - INFO - [Hotels_93-94] Doublon supprimé: Hôtel de la Saint-Michel (93160)
+2026-02-23 15:18:05,922 - INFO - [Hotels_93-94] Doublon supprimé: Résidence Batignolles (94000)
+2026-02-23 15:18:05,922 - INFO - [Hotels_93-94] Doublon supprimé: Hôtel du Minimes (94300)
+2026-02-23 15:18:05,922 - INFO - [Hotels_93-94] Doublon supprimé: Hôtel Le Purpan (94200)
+2026-02-23 15:18:05,922 - INFO - [Hotels_93-94] Doublon supprimé: Hôtel du Belleville (94100)
+2026-02-23 15:18:05,922 - INFO - [Hotels_93-94] Doublon supprimé: Hôtel du Capitole (93000)
+2026-02-23 15:18:05,922 - INFO - [Hotels_93-94] Doublon supprimé: Hôtel Le Compans (93300)
+2026-02-23 15:18:05,923 - INFO - [Hotels_93-94] Doublon supprimé: Hôtel Opéra (93500)
+2026-02-23 15:18:05,923 - INFO - [Hotels_93-94] Doublon supprimé: Hôtel Le Châtelet (93600)
+2026-02-23 15:18:05,923 - INFO - [Hotels_93-94] Doublon supprimé: Résidence Montmartre (94000)
+2026-02-23 15:18:05,923 - INFO - [Hotels_93-94] Doublon supprimé: Hôtel Boulogne (94000)
+2026-02-23 15:18:05,923 - INFO - [Hotels_93-94] Doublon supprimé: Hôtel du La Défense (94300)
+2026-02-23 15:18:05,923 - INFO - [Hotels_93-94] Doublon supprimé: Hôtel Le Part-Dieu (94200)
+2026-02-23 15:18:05,923 - INFO - [Hotels_93-94] Doublon supprimé: Hôtel Le République 12 (94700)
+2026-02-23 15:18:05,923 - INFO - [Hotels_93-94] Doublon supprimé: Hôtel Vieux-Lille 14 (93500)
+2026-02-23 15:18:05,923 - INFO - [Hotels_93-94] Doublon supprimé: Hôtel du Flandres 14 (93400)
+2026-02-23 15:18:05,923 - INFO - [Hotels_93-94] Doublon supprimé: Hôtel de la Europe 14 (93160)
+2026-02-23 15:18:05,923 - INFO - [Hotels_93-94] Doublon supprimé: Résidence Centre 14 (94000)
+2026-02-23 15:18:05,923 - INFO - [Hotels_93-94] Doublon supprimé: Hôtel Batignolles 15 (94000)
+2026-02-23 15:18:05,923 - INFO - [Hotels_93-94] Doublon supprimé: Hôtel du Grands Boulevards 15 (94300)
+2026-02-23 15:18:05,923 - INFO - [Hotels_93-94] Doublon supprimé: Hôtel de la Madeleine 15 (94400)
+2026-02-23 15:18:05,923 - INFO - [Hotels_93-94] Doublon supprimé: Hôtel Le Concorde 15 (94200)
+2026-02-23 15:18:05,923 - INFO - [Hotels_93-94] Doublon supprimé: Résidence Eiffel 15 (94500)
