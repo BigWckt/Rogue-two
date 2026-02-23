@@ -215,3 +215,44 @@
 2026-02-23 15:18:05,923 - INFO - [Hotels_93-94] Doublon supprimé: Hôtel de la Madeleine 15 (94400)
 2026-02-23 15:18:05,923 - INFO - [Hotels_93-94] Doublon supprimé: Hôtel Le Concorde 15 (94200)
 2026-02-23 15:18:05,923 - INFO - [Hotels_93-94] Doublon supprimé: Résidence Eiffel 15 (94500)
+2026-02-23 15:18:30,646 - WARNING - Timeout page 1 — hôtel/Lille
+2026-02-23 15:18:51,875 - WARNING - Timeout page 1 — hôtel/Roubaix
+2026-02-23 15:19:13,009 - WARNING - Timeout page 1 — hôtel/Tourcoing
+2026-02-23 15:19:34,513 - WARNING - Timeout page 1 — hôtel/Valenciennes
+2026-02-23 15:19:55,698 - WARNING - Timeout page 1 — hôtel/Dunkerque
+2026-02-23 15:20:17,578 - WARNING - Timeout page 1 — hôtel/Douai
+2026-02-23 15:20:39,223 - WARNING - Timeout page 1 — résidence hôtelière/Lille
+2026-02-23 15:21:00,852 - WARNING - Timeout page 1 — résidence hôtelière/Roubaix
+2026-02-23 15:21:22,638 - WARNING - Timeout page 1 — résidence hôtelière/Tourcoing
+2026-02-23 15:21:44,316 - WARNING - Timeout page 1 — résidence hôtelière/Valenciennes
+2026-02-23 15:22:05,848 - WARNING - Timeout page 1 — résidence hôtelière/Dunkerque
+2026-02-23 15:22:27,684 - WARNING - Timeout page 1 — résidence hôtelière/Douai
+2026-02-23 15:22:48,951 - WARNING - Timeout page 1 — appart-hôtel/Lille
+2026-02-23 15:23:10,624 - WARNING - Timeout page 1 — appart-hôtel/Roubaix
+2026-02-23 15:23:32,510 - WARNING - Timeout page 1 — appart-hôtel/Tourcoing
+2026-02-23 15:23:53,547 - WARNING - Timeout page 1 — appart-hôtel/Valenciennes
+2026-02-23 15:24:14,731 - WARNING - Timeout page 1 — appart-hôtel/Dunkerque
+2026-02-23 15:24:36,339 - WARNING - Timeout page 1 — appart-hôtel/Douai
+2026-02-23 15:24:57,646 - WARNING - Timeout page 1 — centre de congrès/Lille
+2026-02-23 15:25:18,993 - WARNING - Timeout page 1 — centre de congrès/Roubaix
+2026-02-23 15:25:40,025 - WARNING - Timeout page 1 — centre de congrès/Tourcoing
+2026-02-23 15:26:01,280 - WARNING - Timeout page 1 — centre de congrès/Valenciennes
+2026-02-23 15:26:22,528 - WARNING - Timeout page 1 — centre de congrès/Dunkerque
+2026-02-23 15:26:44,044 - WARNING - Timeout page 1 — centre de congrès/Douai
+2026-02-23 15:34:58,081 - INFO - [Hotels_59] Doublon supprimé: Hôtel Batignolles (59600)
+2026-02-23 15:34:58,082 - INFO - [Hotels_59] Doublon supprimé: Hôtel du Minimes (59300)
+2026-02-23 15:34:58,082 - INFO - [Hotels_59] Doublon supprimé: Hôtel Le Purpan (59500)
+2026-02-23 15:34:58,082 - INFO - [Hotels_59] Doublon supprimé: Hôtel Le Vincennes (59000)
+2026-02-23 15:34:58,082 - INFO - [Hotels_59] Doublon supprimé: Hôtel du Capitole (59140)
+2026-02-23 15:34:58,082 - INFO - [Hotels_59] Doublon supprimé: Hôtel Le Compans (59650)
+2026-02-23 15:34:58,082 - INFO - [Hotels_59] Doublon supprimé: Hôtel de la Bastille (59000)
+2026-02-23 15:34:58,082 - INFO - [Hotels_59] Doublon supprimé: Hôtel Le Châtelet (59800)
+2026-02-23 15:34:58,082 - INFO - [Hotels_59] Doublon supprimé: Résidence Montmartre (59100)
+2026-02-23 15:34:58,082 - INFO - [Hotels_59] Doublon supprimé: Hôtel Boulogne (59140)
+2026-02-23 15:34:58,082 - INFO - [Hotels_59] Doublon supprimé: Hôtel Le Part-Dieu (59600)
+2026-02-23 15:34:58,083 - INFO - [Hotels_59] Doublon supprimé: Hôtel Vieux-Lille 14 (59000)
+2026-02-23 15:34:58,083 - INFO - [Hotels_59] Doublon supprimé: Hôtel du Flandres 14 (59800)
+2026-02-23 15:34:58,083 - INFO - [Hotels_59] Doublon supprimé: Hôtel de la Europe 14 (59100)
+2026-02-23 15:34:58,083 - INFO - [Hotels_59] Doublon supprimé: Hôtel Batignolles 15 (59650)
+2026-02-23 15:34:58,083 - INFO - [Hotels_59] Doublon supprimé: Hôtel du Grands Boulevards 15 (59600)
+2026-02-23 15:34:58,083 - INFO - [Hotels_59] Doublon supprimé: Hôtel de la Madeleine 15 (59100)
