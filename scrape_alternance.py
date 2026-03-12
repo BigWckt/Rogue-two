@@ -23,7 +23,7 @@ DISTANCE_KM = 50
 ROME_CODES = ["D1102", "D1104"]
 # Codes NAF boulangerie-pâtisserie pour LBB (pas de filtre ROME disponible)
 NAF_CODES  = ["10.71A", "10.71B", "10.71C", "10.71D"]
-MAX_TOTAL  = 100
+MAX_TOTAL  = 150
 
 # ── LBB (La Bonne Boite) ─────────────────────────────────────────────────────
 # v1 = version documentée et publiquement accessible
