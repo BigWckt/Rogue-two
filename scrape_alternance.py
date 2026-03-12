@@ -23,8 +23,8 @@ MAX_TOTAL = 100
 
 LBB_ENDPOINT = "https://api.francetravail.io/partenaire/labonneboite/v1/company/"
 LBB_OAUTH_URL = "https://entreprise.francetravail.fr/connexion/oauth2/access_token?realm=/partenaire"
-LBB_CLIENT_ID = "PAR_n8n_a2b06e9b91bb3285ed7afe43f67b260289b4fb31bcbaf45cd0ea863fcb81600e"
-LBB_CLIENT_SECRET = "ba1cbbc148015125f83c70b7425bdfaf0a28235d805d111b4dc21bbe5488f608"
+LBB_CLIENT_ID = "PAR_n8n_308cfb6d71fe761da4276ee41588ae6af15cf7c95e57b4aeae4e9e38f2efd16b"
+LBB_CLIENT_SECRET = "65945188b97c668f3129346860baf1db66906ec7ebae0601cdd48ef29136baea"
 
 LBA_ENDPOINT = "https://api.apprentissage.beta.gouv.fr/api/job/v1/search"
 LBA_TOKEN = (
@@ -78,9 +78,10 @@ def http_get(url, params=None, headers=None, timeout=20):
             print(f"  [ERROR] 401 Unauthorized — vérifier les credentials. URL: {url}")
             return None
         if resp.status_code == 403:
-            print(f"  [ERROR] 403 Forbidden — accès refusé. URL: {url}")
-            print("  [HINT]  Pour l'API LBB sur francetravail.io, vérifier que l'application")
-            print("          est bien souscrite à l'API 'La Bonne Boite' sur le portail France Travail.")
+            print(f"  [ERROR] 403 Forbidden (insufficient_scope) — URL: {url}")
+            print("  [HINT]  L'application n'a pas les droits sur cette API LBB.")
+            print("          → Aller sur https://francetravail.io → Mon espace → Mes applications")
+            print("          → Vérifier la souscription à 'La Bonne Boite' et activer le scope.")
             return None
         resp.raise_for_status()
         return resp.json()
@@ -115,8 +116,8 @@ def _get_lbb_token() -> str | None:
 
     print("  [LBB] Obtention du token OAuth2 …")
     try:
-        # Le scope doit inclure l'identifiant de l'application
-        scope = f"application_{LBB_CLIENT_ID}"
+        # Scope requis pour l'API La Bonne Boite v2 sur francetravail.io
+        scope = f"api_labonneboitev2 application_{LBB_CLIENT_ID}"
         resp = requests.post(
             LBB_OAUTH_URL,
             data={
@@ -130,6 +131,22 @@ def _get_lbb_token() -> str | None:
         if resp.status_code == 401:
             print("  [LBB][ERROR] 401 Unauthorized — credentials invalides pour OAuth2")
             return None
+        if resp.status_code == 400:
+            err = resp.json().get("error_description", "")
+            print(f"  [LBB][ERROR] 400 Bad Request token — {err}")
+            print("  [HINT]  Vérifier que l'application est bien souscrite à l'API LBB")
+            print("          sur https://francetravail.io et que le scope est autorisé.")
+            # Fallback : tenter avec seulement le scope application
+            fallback_scope = f"application_{LBB_CLIENT_ID}"
+            resp2 = requests.post(LBB_OAUTH_URL, data={
+                "grant_type": "client_credentials",
+                "client_id": LBB_CLIENT_ID,
+                "client_secret": LBB_CLIENT_SECRET,
+                "scope": fallback_scope,
+            }, timeout=15)
+            if resp2.status_code != 200:
+                return None
+            resp = resp2
         resp.raise_for_status()
         token_data = resp.json()
         token = token_data.get("access_token")
