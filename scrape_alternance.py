@@ -21,7 +21,7 @@ DISTANCE_KM = 50
 ROME_CODES = ["D1102", "D1104"]
 MAX_TOTAL = 100
 
-LBB_ENDPOINT = "https://api.francetravail.io/partenaire/labonneboite/v1/company/"
+LBB_ENDPOINT = "https://api.francetravail.io/partenaire/labonneboite/v2/company/"
 LBB_OAUTH_URL = "https://entreprise.francetravail.fr/connexion/oauth2/access_token?realm=/partenaire"
 LBB_CLIENT_ID = "PAR_n8n_308cfb6d71fe761da4276ee41588ae6af15cf7c95e57b4aeae4e9e38f2efd16b"
 LBB_CLIENT_SECRET = "65945188b97c668f3129346860baf1db66906ec7ebae0601cdd48ef29136baea"
