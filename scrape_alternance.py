@@ -26,17 +26,15 @@ NAF_CODES  = ["10.71A", "10.71B", "10.71C", "10.71D"]
 MAX_TOTAL  = 100
 
 # ── LBB (La Bonne Boite) ─────────────────────────────────────────────────────
-LBB_ENDPOINT   = "https://api.francetravail.io/partenaire/labonneboite/v2/company/"
+# v1 = version documentée et publiquement accessible
+LBB_ENDPOINT   = "https://api.francetravail.io/partenaire/labonneboite/v1/company/"
 LBB_OAUTH_URL  = "https://entreprise.francetravail.fr/connexion/oauth2/access_token?realm=/partenaire"
 LBB_CLIENT_ID     = "PAR_claudecode_dbfd12ec4f6fe1174e46c36b762d98130ae05b4c33d069c1a5bebebe8573f33a"
 LBB_CLIENT_SECRET = "a866591ed795a34b62c4d379e7f0cff3e393a59da7fbf3dfb04f101b90de2dd3"
-# Scopes à tester dans l'ordre jusqu'au premier qui fonctionne
+# Scope officiel v1 documenté sur francetravail.io
 LBB_SCOPE_CANDIDATES = [
-    f"api_labonneboitev2 application_{LBB_CLIENT_ID}",
-    "api_labonneboitev2",
-    "api_labonneboite",
-    "labonneboitev2",
-    f"application_{LBB_CLIENT_ID}",
+    f"api_labonneboitev1 application_{LBB_CLIENT_ID}",
+    "api_labonneboitev1",
 ]
 
 # ── LBA (La Bonne Alternance) ─────────────────────────────────────────────────
@@ -195,7 +193,7 @@ def _get_lbb_token() -> str | None:
 
 def fetch_lbb() -> list[dict]:
     """
-    Interroge l'API LBB v2 avec filtrage par codes NAF (boulangerie/pâtisserie).
+    Interroge l'API LBB v1 avec filtrage par codes NAF (boulangerie/pâtisserie).
     Retourne des entreprises à fort potentiel de recrutement (Type = "Entreprise cible").
     """
     token = _get_lbb_token()
