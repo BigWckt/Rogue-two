@@ -23,8 +23,8 @@ MAX_TOTAL = 100
 
 LBB_ENDPOINT = "https://api.francetravail.io/partenaire/labonneboite/v2/company/"
 LBB_OAUTH_URL = "https://entreprise.francetravail.fr/connexion/oauth2/access_token?realm=/partenaire"
-LBB_CLIENT_ID = "PAR_claude_5c1b4a8fdb5c52468da374fa0c6be6a50d5dd153527a93c20dffd430edb18fef"
-LBB_CLIENT_SECRET = "2d987a879cc64773446a3bad979782be29c5eda7380497a47f1de4133a6a4f93"
+LBB_CLIENT_ID = "PAR_claudecode_dbfd12ec4f6fe1174e46c36b762d98130ae05b4c33d069c1a5bebebe8573f33a"
+LBB_CLIENT_SECRET = "a866591ed795a34b62c4d379e7f0cff3e393a59da7fbf3dfb04f101b90de2dd3"
 
 LBA_ENDPOINT = "https://api.apprentissage.beta.gouv.fr/api/job/v1/search"
 LBA_TOKEN = (
