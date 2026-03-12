@@ -20,10 +20,13 @@ import sys
 LATITUDE   = 48.8603
 LONGITUDE  = 2.3477
 DISTANCE_KM = 50
-ROME_CODES = ["D1102", "D1104"]
+# Codes ROME étendus pour couvrir boulangerie/pâtisserie + secteurs connexes
+# afin de collecter 150 entreprises ayant un numéro de téléphone visible
+ROME_CODES = ["D1102", "D1104", "D1106", "D1101", "D1103", "G1603"]
 # Codes NAF boulangerie-pâtisserie pour LBB (pas de filtre ROME disponible)
 NAF_CODES  = ["10.71A", "10.71B", "10.71C", "10.71D"]
 MAX_TOTAL  = 150
+PHONE_ONLY = True   # n'exporter que les entreprises ayant un téléphone
 
 # ── LBB (La Bonne Boite) ─────────────────────────────────────────────────────
 # v1 = version documentée et publiquement accessible
@@ -476,7 +479,9 @@ def export_excel(rows: list[dict], filepath: str) -> None:
 def main():
     print("=" * 60)
     print("  SCRAPER ALTERNANCE — Paris 1er, 50 km")
-    print("  LBB : NAF 10.71A/B/C/D | LBA : ROME D1102/D1104")
+    print("  LBB : NAF 10.71A/B/C/D")
+    print("  LBA : ROME D1102/D1104/D1106/D1101/D1103/G1603")
+    print("  Mode : 150 contacts avec téléphone uniquement")
     print("=" * 60)
 
     # ── LBB : une requête avec tous les codes NAF ──
@@ -500,8 +505,13 @@ def main():
         sys.exit(0)
 
     no_phone = sum(1 for r in merged if not str(r.get("Téléphone", "")).strip())
-    if no_phone:
-        print(f"[INFO] {no_phone} entreprise(s) sans téléphone (lignes conservées)")
+    print(f"[INFO] {no_phone}/{len(merged)} entreprise(s) sans téléphone")
+
+    if PHONE_ONLY:
+        merged = [r for r in merged if str(r.get("Téléphone", "")).strip()]
+        print(f"[INFO] Filtrage PHONE_ONLY → {len(merged)} entreprise(s) avec téléphone")
+        if len(merged) < MAX_TOTAL:
+            print(f"[WARN] Seulement {len(merged)} entrées avec téléphone (objectif : {MAX_TOTAL})")
 
     export_excel(merged, OUTPUT_FILE)
 
