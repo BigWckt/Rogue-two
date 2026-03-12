@@ -303,8 +303,11 @@ def _extract_company_lba(item: dict, rome_code: str) -> dict | None:
 def fetch_lba(rome_code: str) -> list[dict]:
     """
     Interroge l'API LBA pour un code ROME.
-    Combine jobs[] (offres actives) et recruiters[] (entreprises probables).
-    Type = "Offre active" dans les deux cas.
+    - jobs[]       → Type "Offre active"      (offre postée, filtrée par ROME)
+    - recruiters[] → Type "Entreprise cible"  (potentiel d'embauche, tous secteurs)
+    Si un SIRET apparaît dans les deux, "Offre active" prend la priorité.
+    Note : les recruiters ne sont pas filtrés par NAF/ROME côté API LBA —
+           ils couvrent tous secteurs ayant recruté en alternance dans la zone.
     """
     params  = {"romes": rome_code, "latitude": LATITUDE,
                "longitude": LONGITUDE, "radius": DISTANCE_KM}
@@ -321,12 +324,27 @@ def fetch_lba(rome_code: str) -> list[dict]:
     print(f"  [LBA] {len(jobs)} offre(s) + {len(recruiters)} recruteur(s) bruts pour ROME={rome_code}")
 
     seen: dict[str, dict] = {}
-    for item in list(jobs) + list(recruiters):
+
+    # D'abord les recruiters (priorité basse)
+    for item in recruiters:
         company = _extract_company_lba(item, rome_code)
-        if company and company["SIRET"] not in seen:
+        if company is None:
+            continue
+        company["Type"] = "Entreprise cible"
+        if company["SIRET"] not in seen:
             seen[company["SIRET"]] = company
 
-    print(f"  [LBA] {len(seen)} entreprise(s) unique(s) après dédup SIRET pour ROME={rome_code}")
+    # Ensuite les jobs (écrasent les recruiters si même SIRET)
+    for item in jobs:
+        company = _extract_company_lba(item, rome_code)
+        if company is None:
+            continue
+        company["Type"] = "Offre active"
+        seen[company["SIRET"]] = company  # priorité absolue
+
+    nb_offre  = sum(1 for c in seen.values() if c["Type"] == "Offre active")
+    nb_cible  = sum(1 for c in seen.values() if c["Type"] == "Entreprise cible")
+    print(f"  [LBA] {len(seen)} unique(s) — {nb_offre} offres actives, {nb_cible} entreprises cibles")
     return list(seen.values())
 
 
@@ -346,6 +364,9 @@ def merge_and_deduplicate(lbb_rows: list[dict], lba_rows: list[dict]) -> list[di
             if s not in by_siret:
                 by_siret[s] = row.copy()
             else:
+                # "Offre active" prend toujours la priorité sur "Entreprise cible"
+                if row.get("Type") == "Offre active":
+                    by_siret[s]["Type"] = "Offre active"
                 for col in EXCEL_COLUMNS:
                     if not by_siret[s].get(col) and row.get(col):
                         by_siret[s][col] = row[col]
@@ -371,6 +392,10 @@ def merge_and_deduplicate(lbb_rows: list[dict], lba_rows: list[dict]) -> list[di
 # ── Export Excel ──────────────────────────────────────────────────────────────
 
 def export_excel(rows: list[dict], filepath: str) -> None:
+    # Trier : "Offre active" en premier, puis "Entreprise cible"
+    type_order = {"Offre active": 0, "Entreprise cible": 1}
+    rows = sorted(rows, key=lambda r: type_order.get(r.get("Type", ""), 2))
+
     df = pd.DataFrame(rows, columns=EXCEL_COLUMNS)
     df = df.head(MAX_TOTAL)
 
