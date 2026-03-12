@@ -2,9 +2,11 @@
 Scraper d'entreprises en alternance/apprentissage
 Sources : La Bonne Boite (LBB) + La Bonne Alternance (LBA)
 Zone : 50km autour de Paris 1er (48.8603, 2.3477)
-ROME : D1102 (Boulangerie-viennoiserie), D1104 (Pâtisserie, confiserie, chocolaterie, glacerie)
+LBB  : filtrage par codes NAF boulangerie/pâtisserie (10.71A/B/C/D)
+LBA  : filtrage par codes ROME D1102 (Boulangerie) + D1104 (Pâtisserie)
 """
 
+import re as _re
 import requests
 import pandas as pd
 from openpyxl import load_workbook
@@ -15,17 +17,31 @@ import sys
 
 # ── Configuration ────────────────────────────────────────────────────────────
 
-LATITUDE = 48.8603
-LONGITUDE = 2.3477
+LATITUDE   = 48.8603
+LONGITUDE  = 2.3477
 DISTANCE_KM = 50
 ROME_CODES = ["D1102", "D1104"]
-MAX_TOTAL = 100
+# Codes NAF boulangerie-pâtisserie pour LBB (pas de filtre ROME disponible)
+NAF_CODES  = ["10.71A", "10.71B", "10.71C", "10.71D"]
+MAX_TOTAL  = 100
 
-LBB_ENDPOINT = "https://api.francetravail.io/partenaire/labonneboite/v2/company/"
-LBB_OAUTH_URL = "https://entreprise.francetravail.fr/connexion/oauth2/access_token?realm=/partenaire"
-LBB_CLIENT_ID = "PAR_claudecode_dbfd12ec4f6fe1174e46c36b762d98130ae05b4c33d069c1a5bebebe8573f33a"
+# ── LBB (La Bonne Boite) ─────────────────────────────────────────────────────
+LBB_ENDPOINT   = "https://api.francetravail.io/partenaire/labonneboite/v2/company/"
+LBB_OAUTH_URL  = "https://entreprise.francetravail.fr/connexion/oauth2/access_token?realm=/partenaire"
+LBB_CLIENT_ID     = "PAR_claudecode_dbfd12ec4f6fe1174e46c36b762d98130ae05b4c33d069c1a5bebebe8573f33a"
 LBB_CLIENT_SECRET = "a866591ed795a34b62c4d379e7f0cff3e393a59da7fbf3dfb04f101b90de2dd3"
+# Scopes à tester dans l'ordre jusqu'au premier qui fonctionne
+LBB_SCOPE_CANDIDATES = [
+    f"api_labonneboitev2 application_{LBB_CLIENT_ID}",
+    "api_labonneboitev2",
+    "api_labonneboite",
+    "labonneboitev2",
+    f"application_{LBB_CLIENT_ID}",
+]
 
+# ── LBA (La Bonne Alternance) ─────────────────────────────────────────────────
+# Note : /fr/explorer/recherche-offre est l'explorateur UI.
+#        L'endpoint REST actif est /api/job/v1/search (même domaine).
 LBA_ENDPOINT = "https://api.apprentissage.beta.gouv.fr/api/job/v1/search"
 LBA_TOKEN = (
     "eyJhbGciOiJIUzI1NiJ9."
@@ -40,6 +56,7 @@ OUTPUT_FILE = "entreprises_alternance_paris.xlsx"
 
 EXCEL_COLUMNS = [
     "Source",
+    "Type",
     "SIRET",
     "Raison sociale",
     "Adresse",
@@ -56,7 +73,6 @@ EXCEL_COLUMNS = [
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 def get_safe(d, *keys, default=None):
-    """Accès sécurisé dans un dict imbriqué."""
     for k in keys:
         if not isinstance(d, dict):
             return default
@@ -79,11 +95,14 @@ def http_get(url, params=None, headers=None, timeout=20):
             return None
         if resp.status_code == 403:
             print(f"  [ERROR] 403 Forbidden (insufficient_scope) — URL: {url}")
-            print("  [HINT]  L'application n'a pas les droits sur cette API LBB.")
-            print("          → Aller sur https://francetravail.io → Mon espace → Mes applications")
-            print("          → Vérifier la souscription à 'La Bonne Boite' et activer le scope.")
+            print("  [HINT]  Souscription LBB non active sur https://francetravail.io")
             return None
         resp.raise_for_status()
+        # Rejeter les réponses HTML (page UI au lieu d'API REST)
+        ct = resp.headers.get("content-type", "")
+        if "html" in ct:
+            print(f"  [ERROR] Réponse HTML reçue au lieu de JSON — URL incorrecte ? {url}")
+            return None
         return resp.json()
     except requests.exceptions.Timeout:
         print(f"  [ERROR] Timeout après {timeout}s sur {url}")
@@ -106,101 +125,105 @@ _lbb_token_cache: dict = {}
 
 def _get_lbb_token() -> str | None:
     """
-    Obtient un Bearer token OAuth2 pour l'API LBB via client_credentials.
-    Met en cache le token jusqu'à expiration.
+    Obtient un Bearer token OAuth2 pour l'API LBB.
+    Teste les scopes dans LBB_SCOPE_CANDIDATES jusqu'au premier succès,
+    puis valide que le token donne accès à l'API (pas juste au serveur OAuth).
     """
     import time as _time
     now = _time.time()
     if _lbb_token_cache.get("token") and _lbb_token_cache.get("expires_at", 0) > now + 30:
         return _lbb_token_cache["token"]
 
-    print("  [LBB] Obtention du token OAuth2 …")
-    try:
-        # Scope requis pour l'API La Bonne Boite v2 sur francetravail.io
-        scope = f"api_labonneboitev2 application_{LBB_CLIENT_ID}"
-        resp = requests.post(
-            LBB_OAUTH_URL,
-            data={
-                "grant_type": "client_credentials",
-                "client_id": LBB_CLIENT_ID,
-                "client_secret": LBB_CLIENT_SECRET,
-                "scope": scope,
-            },
-            timeout=15,
-        )
-        if resp.status_code == 401:
-            print("  [LBB][ERROR] 401 Unauthorized — credentials invalides pour OAuth2")
-            return None
-        if resp.status_code == 400:
-            err = resp.json().get("error_description", "")
-            print(f"  [LBB][ERROR] 400 Bad Request token — {err}")
-            print("  [HINT]  Vérifier que l'application est bien souscrite à l'API LBB")
-            print("          sur https://francetravail.io et que le scope est autorisé.")
-            # Fallback : tenter avec seulement le scope application
-            fallback_scope = f"application_{LBB_CLIENT_ID}"
-            resp2 = requests.post(LBB_OAUTH_URL, data={
-                "grant_type": "client_credentials",
-                "client_id": LBB_CLIENT_ID,
-                "client_secret": LBB_CLIENT_SECRET,
-                "scope": fallback_scope,
-            }, timeout=15)
-            if resp2.status_code != 200:
+    print("  [LBB] Recherche du scope OAuth2 valide…")
+    working_token = None
+    working_scope = None
+
+    for scope in LBB_SCOPE_CANDIDATES:
+        short_scope = scope[:60] + "…" if len(scope) > 60 else scope
+        print(f"  [LBB] Test scope : '{short_scope}'")
+        try:
+            resp = requests.post(
+                LBB_OAUTH_URL,
+                data={
+                    "grant_type": "client_credentials",
+                    "client_id": LBB_CLIENT_ID,
+                    "client_secret": LBB_CLIENT_SECRET,
+                    "scope": scope,
+                },
+                timeout=15,
+            )
+            if resp.status_code == 400:
+                err = resp.json().get("error_description", "?")
+                print(f"    → 400 Bad Request : {err}")
+                continue
+            if resp.status_code == 401:
+                print("    → 401 Unauthorized (credentials invalides)")
                 return None
-            resp = resp2
-        resp.raise_for_status()
-        token_data = resp.json()
-        token = token_data.get("access_token")
-        expires_in = int(token_data.get("expires_in", 1800))
-        _lbb_token_cache["token"] = token
-        _lbb_token_cache["expires_at"] = now + expires_in
-        print(f"  [LBB] Token obtenu (expire dans {expires_in}s)")
-        return token
-    except requests.exceptions.HTTPError as e:
-        print(f"  [LBB][ERROR] HTTP {e.response.status_code} lors de l'obtention du token")
-        return None
-    except Exception as e:
-        print(f"  [LBB][ERROR] Impossible d'obtenir le token OAuth2 : {e}")
+            resp.raise_for_status()
+            token = resp.json().get("access_token")
+            expires_in = int(resp.json().get("expires_in", 1800))
+            print(f"    → Token obtenu (expire dans {expires_in}s) — test sur l'API…")
+
+            # Valider que ce token donne vraiment accès à l'API
+            probe = requests.get(
+                LBB_ENDPOINT,
+                params={"latitude": LATITUDE, "longitude": LONGITUDE,
+                        "distance": 1, "naf_codes": "10.71C"},
+                headers={"Authorization": f"Bearer {token}"},
+                timeout=10,
+            )
+            if probe.status_code == 200:
+                print(f"    → ✅ Scope fonctionnel : '{short_scope}'")
+                working_token = token
+                working_scope = scope
+                _lbb_token_cache["token"] = token
+                _lbb_token_cache["expires_at"] = now + expires_in
+                break
+            else:
+                print(f"    → API répond {probe.status_code} avec ce token")
+        except Exception as e:
+            print(f"    → Erreur : {e}")
+            continue
+
+    if not working_token:
+        print("  [LBB][ERROR] Aucun scope n'a donné accès à l'API LBB.")
+        print("  [HINT] Vérifier la souscription sur https://francetravail.io")
         return None
 
+    return working_token
 
-def fetch_lbb(rome_code: str) -> list[dict]:
+
+def fetch_lbb() -> list[dict]:
     """
-    Interroge l'API LBB (francetravail.io) pour un code ROME.
-    Auth : Bearer token OAuth2.
-    Teste d'abord avec le préfixe lettre (D1102), puis sans (1102) en cas d'échec.
+    Interroge l'API LBB v2 avec filtrage par codes NAF (boulangerie/pâtisserie).
+    Retourne des entreprises à fort potentiel de recrutement (Type = "Entreprise cible").
     """
     token = _get_lbb_token()
     if not token:
-        print(f"  [LBB] Token indisponible — skip ROME={rome_code}")
+        print("  [LBB] Token indisponible — skip")
         return []
 
     headers = {"Authorization": f"Bearer {token}"}
-    base_params = {
+    naf_str = ",".join(NAF_CODES)
+    params = {
         "latitude": LATITUDE,
         "longitude": LONGITUDE,
         "distance": DISTANCE_KM,
-        "rome_codes": rome_code,
+        "naf_codes": naf_str,
     }
 
-    print(f"\n[LBB] Requête ROME={rome_code} …")
-    data = http_get(LBB_ENDPOINT, params=base_params, headers=headers)
-
-    # Si échec ou résultats vides, réessayer sans préfixe lettre
-    if data is None or (isinstance(data, dict) and data.get("companies") is None):
-        rome_numeric = rome_code.lstrip("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz")
-        print(f"  [LBB] Réessai avec ROME numérique={rome_numeric}")
-        base_params["rome_codes"] = rome_numeric
-        data = http_get(LBB_ENDPOINT, params=base_params, headers=headers)
+    print(f"\n[LBB] Requête NAF={naf_str} …")
+    data = http_get(LBB_ENDPOINT, params=params, headers=headers)
 
     if data is None:
-        print(f"  [LBB] Aucune donnée reçue pour ROME={rome_code}")
+        print("  [LBB] Aucune donnée reçue")
         return []
 
     companies = data.get("companies") or data.get("results") or []
     if not isinstance(companies, list):
         companies = data if isinstance(data, list) else []
 
-    print(f"  [LBB] {len(companies)} entreprise(s) brute(s) pour ROME={rome_code}")
+    print(f"  [LBB] {len(companies)} entreprise(s) brute(s)")
 
     results = []
     for c in companies:
@@ -209,6 +232,7 @@ def fetch_lbb(rome_code: str) -> list[dict]:
             continue
         results.append({
             "Source": "LBB",
+            "Type": "Entreprise cible",
             "SIRET": siret,
             "Raison sociale": get_safe(c, "name") or get_safe(c, "raison_sociale") or "",
             "Adresse": get_safe(c, "address") or get_safe(c, "street") or "",
@@ -218,7 +242,7 @@ def fetch_lbb(rome_code: str) -> list[dict]:
             "Email": get_safe(c, "email") or "",
             "Site web": get_safe(c, "website") or get_safe(c, "url") or "",
             "Code NAF": get_safe(c, "naf") or get_safe(c, "code_naf") or "",
-            "Code ROME": rome_code,
+            "Code ROME": "",
             "Distance Paris 1er (km)": get_safe(c, "distance") or "",
         })
     return results
@@ -226,95 +250,81 @@ def fetch_lbb(rome_code: str) -> list[dict]:
 
 # ── La Bonne Alternance ───────────────────────────────────────────────────────
 
-import re as _re
-
 def _parse_address(full_address: str) -> tuple[str, str, str]:
     """
-    Parse une adresse complète du type '2 RUE CATULLE MENDES 75017 PARIS'
-    en (rue, code_postal, ville).
+    Parse '2 RUE CATULLE MENDES 75017 PARIS' → (rue, code_postal, ville).
     """
     if not full_address:
         return "", "", ""
-    # Cherche un code postal 5 chiffres
     m = _re.search(r'(\d{5})\s+(.+)$', full_address.strip())
     if m:
-        code_postal = m.group(1)
-        ville = m.group(2).strip()
-        rue = full_address[:m.start()].strip().rstrip(',').strip()
-        return rue, code_postal, ville
+        return (
+            full_address[:m.start()].strip().rstrip(',').strip(),
+            m.group(1),
+            m.group(2).strip(),
+        )
     return full_address, "", ""
 
 
-def _extract_company(item: dict, rome_code: str) -> dict | None:
-    """
-    Extrait les données entreprise d'un objet job ou recruiter.
-    Retourne None si pas de SIRET.
-    """
-    wp = item.get("workplace") or {}
+def _extract_company_lba(item: dict, rome_code: str) -> dict | None:
+    """Extrait les données entreprise d'un objet job ou recruiter LBA."""
+    wp    = item.get("workplace") or {}
     apply = item.get("apply") or {}
-    domain = wp.get("domain") or {}
-    naf = domain.get("naf") or {}
+    naf   = (wp.get("domain") or {}).get("naf") or {}
 
     siret = str(wp.get("siret") or "").strip()
     if not siret:
         return None
 
-    full_address = (wp.get("location") or {}).get("address") or ""
-    rue, code_postal, ville = _parse_address(full_address)
+    rue, code_postal, ville = _parse_address(
+        (wp.get("location") or {}).get("address") or ""
+    )
 
-    # Code ROME : depuis l'offre si dispo, sinon depuis le paramètre de recherche
     offer = item.get("offer") or {}
-    rome = (offer.get("rome_codes") or [rome_code])[0]
+    rome  = (offer.get("rome_codes") or [rome_code])[0]
 
     return {
         "Source": "LBA",
+        "Type": "Offre active",
         "SIRET": siret,
         "Raison sociale": wp.get("name") or wp.get("legal_name") or wp.get("brand") or "",
         "Adresse": rue,
         "Code postal": code_postal,
         "Ville": ville,
         "Téléphone": apply.get("phone") or "",
-        "Email": "",                          # champ absent du schéma API v1
+        "Email": "",
         "Site web": wp.get("website") or "",
         "Code NAF": naf.get("code") or "",
         "Code ROME": rome,
-        "Distance Paris 1er (km)": "",        # non fourni par cette API
+        "Distance Paris 1er (km)": "",
     }
 
 
 def fetch_lba(rome_code: str) -> list[dict]:
     """
-    Interroge l'API LBA (nouvelle version) pour un code ROME.
-    Combine jobs[] (offres) et recruiters[] (entreprises susceptibles de recruter).
-    Dédoublonne par SIRET.
+    Interroge l'API LBA pour un code ROME.
+    Combine jobs[] (offres actives) et recruiters[] (entreprises probables).
+    Type = "Offre active" dans les deux cas.
     """
-    params = {
-        "romes": rome_code,
-        "latitude": LATITUDE,
-        "longitude": LONGITUDE,
-        "radius": DISTANCE_KM,
-    }
+    params  = {"romes": rome_code, "latitude": LATITUDE,
+               "longitude": LONGITUDE, "radius": DISTANCE_KM}
     headers = {"Authorization": f"Bearer {LBA_TOKEN}"}
 
     print(f"\n[LBA] Requête ROME={rome_code} …")
     data = http_get(LBA_ENDPOINT, params=params, headers=headers)
-
     if data is None:
         print(f"  [LBA] Aucune donnée reçue pour ROME={rome_code}")
         return []
 
-    jobs = data.get("jobs") or []
+    jobs       = data.get("jobs") or []
     recruiters = data.get("recruiters") or []
     print(f"  [LBA] {len(jobs)} offre(s) + {len(recruiters)} recruteur(s) bruts pour ROME={rome_code}")
 
     seen: dict[str, dict] = {}
     for item in list(jobs) + list(recruiters):
-        company = _extract_company(item, rome_code)
-        if company is None:
-            continue
-        siret = company["SIRET"]
-        if siret not in seen:
-            seen[siret] = company
+        company = _extract_company_lba(item, rome_code)
+        if company and company["SIRET"] not in seen:
+            seen[company["SIRET"]] = company
 
     print(f"  [LBA] {len(seen)} entreprise(s) unique(s) après dédup SIRET pour ROME={rome_code}")
     return list(seen.values())
@@ -324,43 +334,33 @@ def fetch_lba(rome_code: str) -> list[dict]:
 
 def merge_and_deduplicate(lbb_rows: list[dict], lba_rows: list[dict]) -> list[dict]:
     """
-    Fusionne LBB et LBA.
-    - Un SIRET présent dans les deux sources → Source = "LBB + LBA"
-    - Prend les champs LBB en priorité (complète avec LBA si champ vide)
-    - Les doublons intra-LBB ou intra-LBA (même SIRET sur plusieurs ROME) sont
-      consolidés sans changer la source.
+    Fusionne LBB et LBA par SIRET.
+    - SIRET LBB seul      → Source="LBB",       Type="Entreprise cible"
+    - SIRET LBA seul      → Source="LBA",       Type="Offre active"
+    - SIRET dans les deux → Source="LBB + LBA", Type="Offre active"
     """
-    # ── Dédup interne LBB (même SIRET sur D1102 et D1104) ──
-    lbb_by_siret: dict[str, dict] = {}
-    for row in lbb_rows:
-        s = row["SIRET"]
-        if s not in lbb_by_siret:
-            lbb_by_siret[s] = row.copy()
-        else:
-            for col in EXCEL_COLUMNS:
-                if not lbb_by_siret[s].get(col) and row.get(col):
-                    lbb_by_siret[s][col] = row[col]
+    def _dedup_internal(rows: list[dict]) -> dict[str, dict]:
+        by_siret: dict[str, dict] = {}
+        for row in rows:
+            s = row["SIRET"]
+            if s not in by_siret:
+                by_siret[s] = row.copy()
+            else:
+                for col in EXCEL_COLUMNS:
+                    if not by_siret[s].get(col) and row.get(col):
+                        by_siret[s][col] = row[col]
+        return by_siret
 
-    # ── Dédup interne LBA (même SIRET sur D1102 et D1104) ──
-    lba_by_siret: dict[str, dict] = {}
-    for row in lba_rows:
-        s = row["SIRET"]
-        if s not in lba_by_siret:
-            lba_by_siret[s] = row.copy()
-        else:
-            for col in EXCEL_COLUMNS:
-                if not lba_by_siret[s].get(col) and row.get(col):
-                    lba_by_siret[s][col] = row[col]
+    lbb_by_siret = _dedup_internal(lbb_rows)
+    lba_by_siret = _dedup_internal(lba_rows)
 
-    # ── Fusion inter-sources ──
     by_siret: dict[str, dict] = dict(lbb_by_siret)
-
     for s, row in lba_by_siret.items():
         if s not in by_siret:
             by_siret[s] = row.copy()
         else:
-            # SIRET présent dans LBB et LBA → fusion
             by_siret[s]["Source"] = "LBB + LBA"
+            by_siret[s]["Type"]   = "Offre active"   # a une offre active
             for col in EXCEL_COLUMNS:
                 if not by_siret[s].get(col) and row.get(col):
                     by_siret[s][col] = row[col]
@@ -371,89 +371,75 @@ def merge_and_deduplicate(lbb_rows: list[dict], lba_rows: list[dict]) -> list[di
 # ── Export Excel ──────────────────────────────────────────────────────────────
 
 def export_excel(rows: list[dict], filepath: str) -> None:
-    """Génère le fichier Excel formaté."""
-
     df = pd.DataFrame(rows, columns=EXCEL_COLUMNS)
     df = df.head(MAX_TOTAL)
 
-    # Statistiques
-    total = len(df)
-    nb_lbb = (df["Source"] == "LBB").sum()
-    nb_lba = (df["Source"] == "LBA").sum()
-    nb_both = (df["Source"] == "LBB + LBA").sum()
-    nb_no_phone = df["Téléphone"].apply(lambda x: not str(x).strip()).sum()
+    total        = len(df)
+    nb_lbb       = (df["Source"] == "LBB").sum()
+    nb_lba       = (df["Source"] == "LBA").sum()
+    nb_both      = (df["Source"] == "LBB + LBA").sum()
+    nb_offre     = (df["Type"] == "Offre active").sum()
+    nb_cible     = (df["Type"] == "Entreprise cible").sum()
+    nb_no_phone  = df["Téléphone"].apply(lambda x: not str(x).strip()).sum()
 
     print(f"\n── Synthèse ──────────────────────────────────────")
     print(f"  Total entreprises exportées : {total}")
     print(f"  LBB uniquement             : {nb_lbb}")
     print(f"  LBA uniquement             : {nb_lba}")
     print(f"  LBB + LBA                  : {nb_both}")
+    print(f"  Offre active               : {nb_offre}")
+    print(f"  Entreprise cible           : {nb_cible}")
     print(f"  Lignes sans téléphone      : {nb_no_phone}")
     print(f"──────────────────────────────────────────────────\n")
 
-    # Écriture de base avec pandas
     with pd.ExcelWriter(filepath, engine="openpyxl") as writer:
         df.to_excel(writer, sheet_name="Résultats_Scrap", index=False)
 
-    # Formatage avec openpyxl
     wb = load_workbook(filepath)
     ws = wb["Résultats_Scrap"]
 
-    header_fill = PatternFill("solid", fgColor="0066FF")
-    alt_fill = PatternFill("solid", fgColor="E8F0FF")
-    white_fill = PatternFill("solid", fgColor="FFFFFF")
+    header_fill  = PatternFill("solid", fgColor="0066FF")
+    alt_fill     = PatternFill("solid", fgColor="E8F0FF")
+    white_fill   = PatternFill("solid", fgColor="FFFFFF")
     summary_fill = PatternFill("solid", fgColor="002080")
-
-    header_font = Font(bold=True, color="FFFFFF")
+    header_font  = Font(bold=True, color="FFFFFF")
     summary_font = Font(bold=True, color="FFFFFF")
 
-    # En-têtes
     for cell in ws[1]:
-        cell.fill = header_fill
-        cell.font = header_font
+        cell.fill      = header_fill
+        cell.font      = header_font
         cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
 
-    # Lignes alternées
     for row_idx, row in enumerate(ws.iter_rows(min_row=2, max_row=ws.max_row), start=2):
         fill = white_fill if row_idx % 2 == 0 else alt_fill
         for cell in row:
-            cell.fill = fill
+            cell.fill      = fill
             cell.alignment = Alignment(vertical="center")
 
-    # Ligne de synthèse
     summary_row = ws.max_row + 2
-    summary_data = [
+    for i, (label, value) in enumerate([
         ("Total entreprises", total),
-        ("dont LBB", nb_lbb),
-        ("dont LBA", nb_lba),
-        ("dont LBB+LBA", nb_both),
-        ("Sans téléphone", nb_no_phone),
-    ]
-    for i, (label, value) in enumerate(summary_data):
-        label_cell = ws.cell(row=summary_row + i, column=1, value=label)
-        value_cell = ws.cell(row=summary_row + i, column=2, value=value)
-        for cell in (label_cell, value_cell):
-            cell.fill = summary_fill
-            cell.font = summary_font
+        ("dont LBB",          nb_lbb),
+        ("dont LBA",          nb_lba),
+        ("dont LBB+LBA",      nb_both),
+        ("Offre active",      nb_offre),
+        ("Entreprise cible",  nb_cible),
+        ("Sans téléphone",    nb_no_phone),
+    ]):
+        for col_idx, val in enumerate([label, value], start=1):
+            cell = ws.cell(row=summary_row + i, column=col_idx, value=val)
+            cell.fill      = summary_fill
+            cell.font      = summary_font
             cell.alignment = Alignment(horizontal="center", vertical="center")
 
-    # Auto-dimensionnement des colonnes
     for col_idx, col in enumerate(ws.columns, start=1):
-        max_len = 0
-        col_letter = get_column_letter(col_idx)
-        for cell in col:
-            try:
-                cell_len = len(str(cell.value)) if cell.value is not None else 0
-                if cell_len > max_len:
-                    max_len = cell_len
-            except Exception:
-                pass
-        adjusted_width = min(max_len + 4, 50)
-        ws.column_dimensions[col_letter].width = adjusted_width
+        max_len = max(
+            (len(str(cell.value)) for cell in col if cell.value is not None),
+            default=0,
+        )
+        ws.column_dimensions[get_column_letter(col_idx)].width = min(max_len + 4, 50)
 
-    # Figer la première ligne
     ws.freeze_panes = "A2"
-
     wb.save(filepath)
     print(f"[OK] Fichier Excel exporté : {filepath}")
 
@@ -463,39 +449,33 @@ def export_excel(rows: list[dict], filepath: str) -> None:
 def main():
     print("=" * 60)
     print("  SCRAPER ALTERNANCE — Paris 1er, 50 km")
-    print("  ROME : D1102 (Boulangerie) + D1104 (Pâtisserie)")
+    print("  LBB : NAF 10.71A/B/C/D | LBA : ROME D1102/D1104")
     print("=" * 60)
 
-    all_lbb: list[dict] = []
+    # ── LBB : une requête avec tous les codes NAF ──
+    print("\n── La Bonne Boite (LBB) ──────────────────────────")
+    all_lbb = fetch_lbb()
+
+    # ── LBA : une requête par code ROME ──
+    print("\n── La Bonne Alternance (LBA) ─────────────────────")
     all_lba: list[dict] = []
-
-    # ── LBB ──
     for rome in ROME_CODES:
-        rows = fetch_lbb(rome)
-        all_lbb.extend(rows)
+        all_lba.extend(fetch_lba(rome))
 
-    # ── LBA ──
-    for rome in ROME_CODES:
-        rows = fetch_lba(rome)
-        all_lba.extend(rows)
+    print(f"\n[INFO] LBB total brut : {len(all_lbb)}")
+    print(f"[INFO] LBA total brut : {len(all_lba)}")
 
-    print(f"\n[INFO] LBB total brut (toutes ROME) : {len(all_lbb)}")
-    print(f"[INFO] LBA total brut (toutes ROME) : {len(all_lba)}")
-
-    # ── Fusion & déduplication ──
     merged = merge_and_deduplicate(all_lbb, all_lba)
     print(f"[INFO] Entreprises uniques après dédup SIRET : {len(merged)}")
 
     if not merged:
-        print("[WARN] Aucune entreprise trouvée. Vérifier les credentials et la disponibilité des APIs.")
+        print("[WARN] Aucune entreprise trouvée.")
         sys.exit(0)
 
-    # ── Vérification des lignes sans téléphone ──
-    no_phone_count = sum(1 for r in merged if not str(r.get("Téléphone", "")).strip())
-    if no_phone_count:
-        print(f"[INFO] {no_phone_count} entreprise(s) sans numéro de téléphone (lignes conservées)")
+    no_phone = sum(1 for r in merged if not str(r.get("Téléphone", "")).strip())
+    if no_phone:
+        print(f"[INFO] {no_phone} entreprise(s) sans téléphone (lignes conservées)")
 
-    # ── Export ──
     export_excel(merged, OUTPUT_FILE)
 
 
