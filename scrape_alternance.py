@@ -28,13 +28,17 @@ MAX_TOTAL  = 150
 # ── LBB (La Bonne Boite) ─────────────────────────────────────────────────────
 # v1 = version documentée et publiquement accessible
 LBB_ENDPOINT   = "https://api.francetravail.io/partenaire/labonneboite/v1/company/"
-LBB_OAUTH_URL  = "https://entreprise.francetravail.fr/connexion/oauth2/access_token?realm=/partenaire"
+LBB_OAUTH_URL  = "https://authentification-partenaire.francetravail.io/connexion/oauth2/access_token?realm=/partenaire"
 LBB_CLIENT_ID     = "PAR_claudecode_dbfd12ec4f6fe1174e46c36b762d98130ae05b4c33d069c1a5bebebe8573f33a"
 LBB_CLIENT_SECRET = "a866591ed795a34b62c4d379e7f0cff3e393a59da7fbf3dfb04f101b90de2dd3"
-# Scope officiel v1 documenté sur francetravail.io
+# Scopes à tester — combinaison N8N en priorité
 LBB_SCOPE_CANDIDATES = [
+    f"search office api_labonneboitev2 application_{LBB_CLIENT_ID}",
+    "search office api_labonneboitev2",
     f"api_labonneboitev1 application_{LBB_CLIENT_ID}",
     "api_labonneboitev1",
+    f"api_labonneboitev2 application_{LBB_CLIENT_ID}",
+    "api_labonneboitev2",
 ]
 
 # ── LBA (La Bonne Alternance) ─────────────────────────────────────────────────
