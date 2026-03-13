@@ -1,14 +1,14 @@
 """
 Scraper d'entreprises en alternance/apprentissage
-Sources : La Bonne Boite (LBB) + La Bonne Alternance (LBA)
+Sources : La Bonne Boite (LBB) + La Bonne Alternance (LBA) + Offres d'emploi FT (OFT)
 Zone : 50km autour de Paris 1er (48.8603, 2.3477)
-LBB  : filtrage par codes NAF boulangerie/pâtisserie (10.71A/B/C/D)
-LBA  : filtrage par codes ROME D1102 (Boulangerie) + D1104 (Pâtisserie)
+LBB  : ROME D1102/D1103 — entreprises à fort potentiel d'embauche (sans téléphone)
+LBA  : ROME D1102/D1103 — offres alternance + recruteurs (avec téléphone)
+OFT  : ROME D1102/D1103/D1104/D1101 — offres d'emploi FT avec contact.telephone
 
 Notes LBB v2 (confirmé par documentation officielle francetravail.io) :
   - Scopes requis simultanément : search office api_labonneboitev2
   - Endpoint : /partenaire/labonneboite/v2/recherche
-  - Paramètre NAF : naf (array)
   - OAuth URL : authentification-partenaire.francetravail.io
 """
 
@@ -29,6 +29,10 @@ DISTANCE_KM = 50
 # Codes ROME étendus pour couvrir boulangerie/pâtisserie + secteurs connexes
 # afin de collecter 150 entreprises ayant un numéro de téléphone visible
 ROME_CODES = ["D1102", "D1103"]
+# Codes ROME pour Offres d'emploi FT (plus large pour maximiser les téléphones)
+ROME_CODES_OFT = ["D1102", "D1103", "D1104", "D1101"]
+# Départements Île-de-France (50km autour de Paris)
+DEPTS_IDF  = ["75", "77", "78", "91", "92", "93", "94", "95"]
 # Codes NAF boulangerie-pâtisserie pour LBB (pas de filtre ROME disponible)
 NAF_CODES  = ["10.71A", "10.71B", "10.71C", "10.71D"]
 MAX_TOTAL  = 150
@@ -48,6 +52,13 @@ LBB_SCOPE_CANDIDATES = [
     "search office api_labonneboitev2",
     f"search office api_labonneboitev2 application_{LBB_CLIENT_ID}",
 ]
+
+# ── OFT (Offres d'emploi France Travail) ─────────────────────────────────────
+OFT_ENDPOINT = "https://api.francetravail.io/partenaire/offresdemploi/v2/offres/search"
+OFT_SCOPE    = "api_offresdemploiv2 o2dsoffre"
+# Même client_id/secret que LBB (même application FT)
+OFT_CLIENT_ID     = LBB_CLIENT_ID
+OFT_CLIENT_SECRET = LBB_CLIENT_SECRET
 
 # ── LBA (La Bonne Alternance) ─────────────────────────────────────────────────
 # Note : /fr/explorer/recherche-offre est l'explorateur UI.
@@ -371,23 +382,110 @@ def fetch_lba(rome_code: str) -> list[dict]:
     return list(seen.values())
 
 
+# ── Offres d'emploi France Travail (OFT) ─────────────────────────────────────
+
+_oft_token_cache: dict = {}
+
+
+def _get_oft_token() -> str | None:
+    import time as _time
+    now = _time.time()
+    if _oft_token_cache.get("token") and _oft_token_cache.get("expires_at", 0) > now + 30:
+        return _oft_token_cache["token"]
+    resp = requests.post(
+        LBB_OAUTH_URL,
+        data={
+            "grant_type": "client_credentials",
+            "client_id": OFT_CLIENT_ID,
+            "client_secret": OFT_CLIENT_SECRET,
+            "scope": OFT_SCOPE,
+        },
+        timeout=15,
+    )
+    if resp.status_code != 200:
+        print(f"  [OFT] Token KO {resp.status_code}: {resp.text[:100]}")
+        return None
+    token = resp.json().get("access_token")
+    expires_in = int(resp.json().get("expires_in", 1800))
+    _oft_token_cache["token"] = token
+    _oft_token_cache["expires_at"] = now + expires_in
+    return token
+
+
+def fetch_oft() -> list[dict]:
+    """
+    Interroge l'API Offres d'emploi v2 (scope api_offresdemploiv2 o2dsoffre).
+    Retourne les offres ayant contact.telephone renseigné.
+    Pas de SIRET disponible — dédup par (nom_entreprise, code_postal).
+    """
+    token = _get_oft_token()
+    if not token:
+        print("  [OFT] Token indisponible — skip")
+        return []
+
+    headers = {"Authorization": f"Bearer {token}", "Accept": "application/json"}
+    results = []
+    seen: set[str] = set()
+
+    for dept in DEPTS_IDF:
+        for rome in ROME_CODES_OFT:
+            params = {"codeROME": rome, "departement": dept, "range": "0-149"}
+            data = http_get(OFT_ENDPOINT, params=params, headers=headers)
+            if data is None:
+                continue
+            offres = data.get("resultats") or []
+            for o in offres:
+                phone = (o.get("contact") or {}).get("telephone", "").strip()
+                if not phone:
+                    continue
+                lieu   = o.get("lieuTravail") or {}
+                entrep = o.get("entreprise") or {}
+                nom    = entrep.get("nom") or ""
+                cp     = lieu.get("codePostal") or ""
+                key    = f"{nom.lower().strip()}|{cp}"
+                if key in seen:
+                    continue
+                seen.add(key)
+                results.append({
+                    "Source": "OFT",
+                    "Type": "Offre active",
+                    "SIRET": "",
+                    "Raison sociale": nom,
+                    "Adresse": "",
+                    "Code postal": cp,
+                    "Ville": lieu.get("libelle", "").split(" - ")[-1].title(),
+                    "Téléphone": phone,
+                    "Email": (o.get("contact") or {}).get("courriel") or "",
+                    "Site web": (o.get("contact") or {}).get("urlPostulation") or "",
+                    "Code NAF": o.get("codeNAF") or "",
+                    "Code ROME": o.get("romeCode") or rome,
+                    "Distance Paris 1er (km)": "",
+                })
+
+    print(f"  [OFT] {len(results)} offre(s) avec téléphone")
+    return results
+
+
 # ── Déduplication et fusion des sources ──────────────────────────────────────
 
-def merge_and_deduplicate(lbb_rows: list[dict], lba_rows: list[dict]) -> list[dict]:
+def merge_and_deduplicate(
+    lbb_rows: list[dict], lba_rows: list[dict], oft_rows: list[dict]
+) -> list[dict]:
     """
-    Fusionne LBB et LBA par SIRET.
-    - SIRET LBB seul      → Source="LBB",       Type="Entreprise cible"
-    - SIRET LBA seul      → Source="LBA",       Type="Offre active"
-    - SIRET dans les deux → Source="LBB + LBA", Type="Offre active"
+    Fusionne LBB, LBA et OFT.
+    - Dédup LBB/LBA par SIRET.
+    - OFT n'a pas de SIRET : dédup par (nom_entreprise, code_postal),
+      puis enrichit un SIRET existant si le nom correspond.
     """
-    def _dedup_internal(rows: list[dict]) -> dict[str, dict]:
+    def _dedup_by_siret(rows: list[dict]) -> dict[str, dict]:
         by_siret: dict[str, dict] = {}
         for row in rows:
             s = row["SIRET"]
+            if not s:
+                continue
             if s not in by_siret:
                 by_siret[s] = row.copy()
             else:
-                # "Offre active" prend toujours la priorité sur "Entreprise cible"
                 if row.get("Type") == "Offre active":
                     by_siret[s]["Type"] = "Offre active"
                 for col in EXCEL_COLUMNS:
@@ -395,21 +493,43 @@ def merge_and_deduplicate(lbb_rows: list[dict], lba_rows: list[dict]) -> list[di
                         by_siret[s][col] = row[col]
         return by_siret
 
-    lbb_by_siret = _dedup_internal(lbb_rows)
-    lba_by_siret = _dedup_internal(lba_rows)
+    lbb_by_siret = _dedup_by_siret(lbb_rows)
+    lba_by_siret = _dedup_by_siret(lba_rows)
 
+    # Fusionner LBB + LBA par SIRET
     by_siret: dict[str, dict] = dict(lbb_by_siret)
     for s, row in lba_by_siret.items():
         if s not in by_siret:
             by_siret[s] = row.copy()
         else:
             by_siret[s]["Source"] = "LBB + LBA"
-            by_siret[s]["Type"]   = "Offre active"   # a une offre active
+            by_siret[s]["Type"]   = "Offre active"
             for col in EXCEL_COLUMNS:
                 if not by_siret[s].get(col) and row.get(col):
                     by_siret[s][col] = row[col]
 
-    return list(by_siret.values())
+    # Index nom→siret pour enrichissement OFT
+    name_to_siret: dict[str, str] = {
+        row["Raison sociale"].lower().strip(): s
+        for s, row in by_siret.items()
+        if row.get("Raison sociale")
+    }
+
+    oft_only: list[dict] = []
+    for row in oft_rows:
+        nom_key = row.get("Raison sociale", "").lower().strip()
+        siret = name_to_siret.get(nom_key)
+        if siret:
+            # Enrichir l'entrée existante avec le téléphone OFT
+            for col in EXCEL_COLUMNS:
+                if not by_siret[siret].get(col) and row.get(col):
+                    by_siret[siret][col] = row[col]
+            if "OFT" not in by_siret[siret]["Source"]:
+                by_siret[siret]["Source"] += " + OFT"
+        else:
+            oft_only.append(row.copy())
+
+    return list(by_siret.values()) + oft_only
 
 
 # ── Export Excel ──────────────────────────────────────────────────────────────
@@ -425,7 +545,8 @@ def export_excel(rows: list[dict], filepath: str) -> None:
     total        = len(df)
     nb_lbb       = (df["Source"] == "LBB").sum()
     nb_lba       = (df["Source"] == "LBA").sum()
-    nb_both      = (df["Source"] == "LBB + LBA").sum()
+    nb_oft       = (df["Source"] == "OFT").sum()
+    nb_both      = df["Source"].str.contains(r"\+").sum()
     nb_offre     = (df["Type"] == "Offre active").sum()
     nb_cible     = (df["Type"] == "Entreprise cible").sum()
     nb_no_phone  = df["Téléphone"].apply(lambda x: not str(x).strip()).sum()
@@ -434,7 +555,8 @@ def export_excel(rows: list[dict], filepath: str) -> None:
     print(f"  Total entreprises exportées : {total}")
     print(f"  LBB uniquement             : {nb_lbb}")
     print(f"  LBA uniquement             : {nb_lba}")
-    print(f"  LBB + LBA                  : {nb_both}")
+    print(f"  OFT uniquement             : {nb_oft}")
+    print(f"  Multi-sources (LBB+LBA…)   : {nb_both}")
     print(f"  Offre active               : {nb_offre}")
     print(f"  Entreprise cible           : {nb_cible}")
     print(f"  Lignes sans téléphone      : {nb_no_phone}")
@@ -469,7 +591,8 @@ def export_excel(rows: list[dict], filepath: str) -> None:
         ("Total entreprises", total),
         ("dont LBB",          nb_lbb),
         ("dont LBA",          nb_lba),
-        ("dont LBB+LBA",      nb_both),
+        ("dont OFT",          nb_oft),
+        ("dont multi-sources",nb_both),
         ("Offre active",      nb_offre),
         ("Entreprise cible",  nb_cible),
         ("Sans téléphone",    nb_no_phone),
@@ -497,26 +620,32 @@ def export_excel(rows: list[dict], filepath: str) -> None:
 def main():
     print("=" * 60)
     print("  SCRAPER ALTERNANCE — Paris 1er, 50 km")
-    print("  LBB v2 : NAF 10.71A/B/C/D  |  scope: search office api_labonneboitev2")
-    print("  LBA    : ROME D1102/D1104/D1106/D1101/D1103/G1603")
+    print("  LBB v2 : ROME D1102/D1103  |  scope: search office api_labonneboitev2")
+    print("  LBA    : ROME D1102/D1103")
+    print("  OFT    : ROME D1102/D1103/D1104/D1101 — Offres d'emploi FT")
     print("  Mode   : 150 contacts avec téléphone uniquement")
     print("=" * 60)
 
-    # ── LBB : une requête avec tous les codes NAF ──
+    # ── LBB ──
     print("\n── La Bonne Boite (LBB) ──────────────────────────")
     all_lbb = fetch_lbb()
 
-    # ── LBA : une requête par code ROME ──
+    # ── LBA ──
     print("\n── La Bonne Alternance (LBA) ─────────────────────")
     all_lba: list[dict] = []
     for rome in ROME_CODES:
         all_lba.extend(fetch_lba(rome))
 
+    # ── OFT ──
+    print("\n── Offres d'emploi France Travail (OFT) ──────────")
+    all_oft = fetch_oft()
+
     print(f"\n[INFO] LBB total brut : {len(all_lbb)}")
     print(f"[INFO] LBA total brut : {len(all_lba)}")
+    print(f"[INFO] OFT total brut : {len(all_oft)}")
 
-    merged = merge_and_deduplicate(all_lbb, all_lba)
-    print(f"[INFO] Entreprises uniques après dédup SIRET : {len(merged)}")
+    merged = merge_and_deduplicate(all_lbb, all_lba, all_oft)
+    print(f"[INFO] Entreprises uniques après dédup : {len(merged)}")
 
     if not merged:
         print("[WARN] Aucune entreprise trouvée.")
