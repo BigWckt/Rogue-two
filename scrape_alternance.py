@@ -27,7 +27,7 @@ LONGITUDE  = 2.3477
 DISTANCE_KM = 50
 # Codes ROME étendus pour couvrir boulangerie/pâtisserie + secteurs connexes
 # afin de collecter 150 entreprises ayant un numéro de téléphone visible
-ROME_CODES = ["D1102", "D1104", "D1106", "D1101", "D1103", "G1603"]
+ROME_CODES = ["D1102", "D1103"]
 # Codes NAF boulangerie-pâtisserie pour LBB (pas de filtre ROME disponible)
 NAF_CODES  = ["10.71A", "10.71B", "10.71C", "10.71D"]
 MAX_TOTAL  = 150
