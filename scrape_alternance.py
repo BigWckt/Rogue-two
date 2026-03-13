@@ -5,10 +5,11 @@ Zone : 50km autour de Paris 1er (48.8603, 2.3477)
 LBB  : filtrage par codes NAF boulangerie/pâtisserie (10.71A/B/C/D)
 LBA  : filtrage par codes ROME D1102 (Boulangerie) + D1104 (Pâtisserie)
 
-Notes LBB v2 (confirmé par support France Travail) :
+Notes LBB v2 (confirmé par documentation officielle francetravail.io) :
   - Scopes requis simultanément : search office api_labonneboitev2
-  - Endpoint : /partenaire/labonneboite/v2/companies/ (pluriel)
-  - OAuth URL (ProxyProConnect) : entreprise.francetravail.fr
+  - Endpoint : /partenaire/labonneboite/v2/recherche
+  - Paramètre NAF : naf (array)
+  - OAuth URL : authentification-partenaire.francetravail.io
 """
 
 import re as _re
@@ -35,11 +36,11 @@ PHONE_ONLY = True   # n'exporter que les entreprises ayant un téléphone
 
 # ── LBB (La Bonne Boite) ─────────────────────────────────────────────────────
 # v2 — scopes et endpoint confirmés par support France Travail
-LBB_ENDPOINT   = "https://api.francetravail.io/partenaire/labonneboite/v2/companies/"
-# OAuth2 ProxyProConnect (nouvelle URL France Travail)
-LBB_OAUTH_URL         = "https://entreprise.francetravail.fr/connexion/oauth2/access_token?realm=/partenaire"
-# Ancienne URL conservée en fallback si la nouvelle échoue
-LBB_OAUTH_URL_LEGACY  = "https://authentification-partenaire.francetravail.io/connexion/oauth2/access_token?realm=/partenaire"
+LBB_ENDPOINT   = "https://api.francetravail.io/partenaire/labonneboite/v2/recherche"
+# OAuth2 URL officielle (documentation francetravail.io)
+LBB_OAUTH_URL         = "https://authentification-partenaire.francetravail.io/connexion/oauth2/access_token?realm=/partenaire"
+# Fallback ProxyProConnect
+LBB_OAUTH_URL_LEGACY  = "https://entreprise.francetravail.fr/connexion/oauth2/access_token?realm=/partenaire"
 LBB_CLIENT_ID     = "PAR_claudecode_dbfd12ec4f6fe1174e46c36b762d98130ae05b4c33d069c1a5bebebe8573f33a"
 LBB_CLIENT_SECRET = "a866591ed795a34b62c4d379e7f0cff3e393a59da7fbf3dfb04f101b90de2dd3"
 # Scopes requis simultanément (confirmé support FT) — fallback avec application_id si nécessaire
@@ -182,7 +183,7 @@ def _get_lbb_token() -> str | None:
                 probe = requests.get(
                     LBB_ENDPOINT,
                     params={"latitude": LATITUDE, "longitude": LONGITUDE,
-                            "distance": 1, "naf_codes": "10.71C"},
+                            "distance": 1, "rome": "D1102", "page_size": 1},
                     headers={"Authorization": f"Bearer {token}"},
                     timeout=10,
                 )
@@ -206,8 +207,10 @@ def _get_lbb_token() -> str | None:
 
 def fetch_lbb() -> list[dict]:
     """
-    Interroge l'API LBB v2 avec filtrage par codes NAF (boulangerie/pâtisserie).
-    Retourne des entreprises à fort potentiel de recrutement (Type = "Entreprise cible").
+    Interroge l'API LBB v2 (/v2/recherche) par codes ROME.
+    Paramètres confirmés : rome, latitude, longitude, distance, page, page_size.
+    Note : l'API retourne items[] avec siret, company_name, naf, city, postcode,
+           hiring_potential — mais PAS de téléphone (email = "yes"/"no" seulement).
     """
     token = _get_lbb_token()
     if not token:
@@ -215,75 +218,56 @@ def fetch_lbb() -> list[dict]:
         return []
 
     headers = {"Authorization": f"Bearer {token}"}
-    naf_str = ",".join(NAF_CODES)
-    params = {
-        "latitude": LATITUDE,
-        "longitude": LONGITUDE,
-        "distance": DISTANCE_KM,
-        "naf_codes": naf_str,
-    }
-
-    print(f"\n[LBB] Requête NAF={naf_str} …")
-    data = http_get(LBB_ENDPOINT, params=params, headers=headers)
-
-    if data is None:
-        print("  [LBB] Aucune donnée reçue")
-        return []
-
-    # v2 : clé racine peut être "companies", "entreprises", "results" ou liste directe
-    companies = (
-        data.get("companies")
-        or data.get("entreprises")
-        or data.get("results")
-        or []
-    )
-    if not isinstance(companies, list):
-        companies = data if isinstance(data, list) else []
-
-    print(f"  [LBB] {len(companies)} entreprise(s) brute(s)")
-
     results = []
-    for c in companies:
-        # v2 peut utiliser "siret" ou "siretNumber"
-        siret = str(
-            get_safe(c, "siret") or get_safe(c, "siretNumber") or ""
-        ).strip()
-        if not siret:
-            continue
-        # v2 : adresse peut être dans un objet "address" imbriqué
-        addr_obj = c.get("address") if isinstance(c.get("address"), dict) else {}
-        results.append({
-            "Source": "LBB",
-            "Type": "Entreprise cible",
-            "SIRET": siret,
-            "Raison sociale": (
-                get_safe(c, "name") or get_safe(c, "raison_sociale")
-                or get_safe(c, "label") or ""
-            ),
-            "Adresse": (
-                addr_obj.get("street") or addr_obj.get("label")
-                or get_safe(c, "address") or get_safe(c, "street") or ""
-            ),
-            "Code postal": str(
-                addr_obj.get("zipCode") or addr_obj.get("zip_code")
-                or get_safe(c, "zipCode") or get_safe(c, "zip_code") or ""
-            ),
-            "Ville": (
-                addr_obj.get("city") or addr_obj.get("commune")
-                or get_safe(c, "city") or get_safe(c, "commune") or ""
-            ),
-            "Téléphone": get_safe(c, "phone") or get_safe(c, "phoneNumber") or "",
-            "Email": get_safe(c, "email") or "",
-            "Site web": get_safe(c, "website") or get_safe(c, "url") or "",
-            "Code NAF": (
-                get_safe(c, "naf") or get_safe(c, "nafCode")
-                or get_safe(c, "code_naf") or ""
-            ),
-            "Code ROME": "",
-            "Distance Paris 1er (km)": (
-                get_safe(c, "distance") or get_safe(c, "distanceKm") or ""
-            ),
-        })
+    seen_sirets: set[str] = set()
+
+    for rome_code in ROME_CODES:
+        page = 1
+        page_size = 100
+        while True:
+            params = {
+                "latitude": LATITUDE,
+                "longitude": LONGITUDE,
+                "distance": DISTANCE_KM,
+                "rome": rome_code,
+                "page": page,
+                "page_size": page_size,
+            }
+            print(f"\n[LBB] Requête ROME={rome_code} page={page} …")
+            data = http_get(LBB_ENDPOINT, params=params, headers=headers)
+            if data is None:
+                break
+
+            items = data.get("items") or []
+            total_hits = data.get("hits", 0)
+            print(f"  [LBB] {len(items)} item(s) (hits total: {total_hits})")
+
+            for c in items:
+                siret = str(c.get("siret") or "").strip()
+                if not siret or siret in seen_sirets:
+                    continue
+                seen_sirets.add(siret)
+                results.append({
+                    "Source": "LBB",
+                    "Type": "Entreprise cible",
+                    "SIRET": siret,
+                    "Raison sociale": c.get("company_name") or c.get("office_name") or "",
+                    "Adresse": "",
+                    "Code postal": str(c.get("postcode") or ""),
+                    "Ville": c.get("city") or "",
+                    "Téléphone": "",  # /v2/recherche ne fournit pas le téléphone
+                    "Email": "",      # email="yes"/"no" — pas l'adresse réelle
+                    "Site web": "",
+                    "Code NAF": c.get("naf") or "",
+                    "Code ROME": rome_code,
+                    "Distance Paris 1er (km)": "",
+                })
+
+            if len(items) < page_size or len(results) >= MAX_TOTAL * 3:
+                break
+            page += 1
+
+    print(f"  [LBB] {len(results)} entreprise(s) brute(s) au total")
     return results
 
 
