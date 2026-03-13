@@ -4,6 +4,11 @@ Sources : La Bonne Boite (LBB) + La Bonne Alternance (LBA)
 Zone : 50km autour de Paris 1er (48.8603, 2.3477)
 LBB  : filtrage par codes NAF boulangerie/pâtisserie (10.71A/B/C/D)
 LBA  : filtrage par codes ROME D1102 (Boulangerie) + D1104 (Pâtisserie)
+
+Notes LBB v2 (confirmé par support France Travail) :
+  - Scopes requis simultanément : search office api_labonneboitev2
+  - Endpoint : /partenaire/labonneboite/v2/companies/ (pluriel)
+  - OAuth URL (ProxyProConnect) : entreprise.francetravail.fr
 """
 
 import re as _re
@@ -29,19 +34,18 @@ MAX_TOTAL  = 150
 PHONE_ONLY = True   # n'exporter que les entreprises ayant un téléphone
 
 # ── LBB (La Bonne Boite) ─────────────────────────────────────────────────────
-# v1 = version documentée et publiquement accessible
-LBB_ENDPOINT   = "https://api.francetravail.io/partenaire/labonneboite/v1/company/"
-LBB_OAUTH_URL  = "https://authentification-partenaire.francetravail.io/connexion/oauth2/access_token?realm=/partenaire"
+# v2 — scopes et endpoint confirmés par support France Travail
+LBB_ENDPOINT   = "https://api.francetravail.io/partenaire/labonneboite/v2/companies/"
+# OAuth2 ProxyProConnect (nouvelle URL France Travail)
+LBB_OAUTH_URL         = "https://entreprise.francetravail.fr/connexion/oauth2/access_token?realm=/partenaire"
+# Ancienne URL conservée en fallback si la nouvelle échoue
+LBB_OAUTH_URL_LEGACY  = "https://authentification-partenaire.francetravail.io/connexion/oauth2/access_token?realm=/partenaire"
 LBB_CLIENT_ID     = "PAR_claudecode_dbfd12ec4f6fe1174e46c36b762d98130ae05b4c33d069c1a5bebebe8573f33a"
 LBB_CLIENT_SECRET = "a866591ed795a34b62c4d379e7f0cff3e393a59da7fbf3dfb04f101b90de2dd3"
-# Scopes à tester — combinaison N8N en priorité
+# Scopes requis simultanément (confirmé support FT) — fallback avec application_id si nécessaire
 LBB_SCOPE_CANDIDATES = [
-    f"search office api_labonneboitev2 application_{LBB_CLIENT_ID}",
     "search office api_labonneboitev2",
-    f"api_labonneboitev1 application_{LBB_CLIENT_ID}",
-    "api_labonneboitev1",
-    f"api_labonneboitev2 application_{LBB_CLIENT_ID}",
-    "api_labonneboitev2",
+    f"search office api_labonneboitev2 application_{LBB_CLIENT_ID}",
 ]
 
 # ── LBA (La Bonne Alternance) ─────────────────────────────────────────────────
@@ -130,77 +134,79 @@ _lbb_token_cache: dict = {}
 
 def _get_lbb_token() -> str | None:
     """
-    Obtient un Bearer token OAuth2 pour l'API LBB.
-    Teste les scopes dans LBB_SCOPE_CANDIDATES jusqu'au premier succès,
-    puis valide que le token donne accès à l'API (pas juste au serveur OAuth).
+    Obtient un Bearer token OAuth2 pour l'API LBB v2.
+    Teste les scopes dans LBB_SCOPE_CANDIDATES et les deux URLs OAuth
+    (ProxyProConnect en priorité, legacy en fallback) jusqu'au premier succès,
+    puis valide que le token donne accès à l'API.
     """
     import time as _time
     now = _time.time()
     if _lbb_token_cache.get("token") and _lbb_token_cache.get("expires_at", 0) > now + 30:
         return _lbb_token_cache["token"]
 
-    print("  [LBB] Recherche du scope OAuth2 valide…")
-    working_token = None
-    working_scope = None
+    print("  [LBB] Recherche du token OAuth2 (v2)…")
+    oauth_urls = [
+        ("ProxyProConnect", LBB_OAUTH_URL),
+        ("Legacy", LBB_OAUTH_URL_LEGACY),
+    ]
 
     for scope in LBB_SCOPE_CANDIDATES:
         short_scope = scope[:60] + "…" if len(scope) > 60 else scope
-        print(f"  [LBB] Test scope : '{short_scope}'")
-        try:
-            resp = requests.post(
-                LBB_OAUTH_URL,
-                data={
-                    "grant_type": "client_credentials",
-                    "client_id": LBB_CLIENT_ID,
-                    "client_secret": LBB_CLIENT_SECRET,
-                    "scope": scope,
-                },
-                timeout=15,
-            )
-            if resp.status_code == 400:
-                err = resp.json().get("error_description", "?")
-                print(f"    → 400 Bad Request : {err}")
+        for url_label, oauth_url in oauth_urls:
+            print(f"  [LBB] Test scope='{short_scope}' via {url_label}…")
+            try:
+                resp = requests.post(
+                    oauth_url,
+                    data={
+                        "grant_type": "client_credentials",
+                        "client_id": LBB_CLIENT_ID,
+                        "client_secret": LBB_CLIENT_SECRET,
+                        "scope": scope,
+                    },
+                    timeout=15,
+                )
+                if resp.status_code == 400:
+                    err = resp.json().get("error_description", "?")
+                    print(f"    → 400 Bad Request : {err}")
+                    continue
+                if resp.status_code == 401:
+                    print("    → 401 Unauthorized (credentials invalides)")
+                    # credentials invalides : inutile de tester d'autres URLs/scopes
+                    return None
+                resp.raise_for_status()
+                token = resp.json().get("access_token")
+                expires_in = int(resp.json().get("expires_in", 1800))
+                print(f"    → Token obtenu (expire dans {expires_in}s) — test sur l'API…")
+
+                # Valider que ce token donne vraiment accès à l'endpoint v2
+                probe = requests.get(
+                    LBB_ENDPOINT,
+                    params={"latitude": LATITUDE, "longitude": LONGITUDE,
+                            "distance": 1, "naf_codes": "10.71C"},
+                    headers={"Authorization": f"Bearer {token}"},
+                    timeout=10,
+                )
+                if probe.status_code == 200:
+                    print(f"    → ✅ Token valide (scope='{short_scope}', url={url_label})")
+                    _lbb_token_cache["token"] = token
+                    _lbb_token_cache["expires_at"] = now + expires_in
+                    return token
+                else:
+                    ct = probe.headers.get("content-type", "")
+                    body = probe.text[:200] if "html" not in ct else "<HTML>"
+                    print(f"    → API répond {probe.status_code} : {body}")
+            except Exception as e:
+                print(f"    → Erreur : {e}")
                 continue
-            if resp.status_code == 401:
-                print("    → 401 Unauthorized (credentials invalides)")
-                return None
-            resp.raise_for_status()
-            token = resp.json().get("access_token")
-            expires_in = int(resp.json().get("expires_in", 1800))
-            print(f"    → Token obtenu (expire dans {expires_in}s) — test sur l'API…")
 
-            # Valider que ce token donne vraiment accès à l'API
-            probe = requests.get(
-                LBB_ENDPOINT,
-                params={"latitude": LATITUDE, "longitude": LONGITUDE,
-                        "distance": 1, "naf_codes": "10.71C"},
-                headers={"Authorization": f"Bearer {token}"},
-                timeout=10,
-            )
-            if probe.status_code == 200:
-                print(f"    → ✅ Scope fonctionnel : '{short_scope}'")
-                working_token = token
-                working_scope = scope
-                _lbb_token_cache["token"] = token
-                _lbb_token_cache["expires_at"] = now + expires_in
-                break
-            else:
-                print(f"    → API répond {probe.status_code} avec ce token")
-        except Exception as e:
-            print(f"    → Erreur : {e}")
-            continue
-
-    if not working_token:
-        print("  [LBB][ERROR] Aucun scope n'a donné accès à l'API LBB.")
-        print("  [HINT] Vérifier la souscription sur https://francetravail.io")
-        return None
-
-    return working_token
+    print("  [LBB][ERROR] Aucune combinaison scope/URL n'a donné accès à l'API LBB v2.")
+    print("  [HINT] Vérifier la souscription 'La Bonne Boite v2' sur https://francetravail.io")
+    return None
 
 
 def fetch_lbb() -> list[dict]:
     """
-    Interroge l'API LBB v1 avec filtrage par codes NAF (boulangerie/pâtisserie).
+    Interroge l'API LBB v2 avec filtrage par codes NAF (boulangerie/pâtisserie).
     Retourne des entreprises à fort potentiel de recrutement (Type = "Entreprise cible").
     """
     token = _get_lbb_token()
@@ -224,7 +230,13 @@ def fetch_lbb() -> list[dict]:
         print("  [LBB] Aucune donnée reçue")
         return []
 
-    companies = data.get("companies") or data.get("results") or []
+    # v2 : clé racine peut être "companies", "entreprises", "results" ou liste directe
+    companies = (
+        data.get("companies")
+        or data.get("entreprises")
+        or data.get("results")
+        or []
+    )
     if not isinstance(companies, list):
         companies = data if isinstance(data, list) else []
 
@@ -232,23 +244,45 @@ def fetch_lbb() -> list[dict]:
 
     results = []
     for c in companies:
-        siret = str(get_safe(c, "siret") or "").strip()
+        # v2 peut utiliser "siret" ou "siretNumber"
+        siret = str(
+            get_safe(c, "siret") or get_safe(c, "siretNumber") or ""
+        ).strip()
         if not siret:
             continue
+        # v2 : adresse peut être dans un objet "address" imbriqué
+        addr_obj = c.get("address") if isinstance(c.get("address"), dict) else {}
         results.append({
             "Source": "LBB",
             "Type": "Entreprise cible",
             "SIRET": siret,
-            "Raison sociale": get_safe(c, "name") or get_safe(c, "raison_sociale") or "",
-            "Adresse": get_safe(c, "address") or get_safe(c, "street") or "",
-            "Code postal": str(get_safe(c, "zipCode") or get_safe(c, "zip_code") or ""),
-            "Ville": get_safe(c, "city") or get_safe(c, "commune") or "",
-            "Téléphone": get_safe(c, "phone") or "",
+            "Raison sociale": (
+                get_safe(c, "name") or get_safe(c, "raison_sociale")
+                or get_safe(c, "label") or ""
+            ),
+            "Adresse": (
+                addr_obj.get("street") or addr_obj.get("label")
+                or get_safe(c, "address") or get_safe(c, "street") or ""
+            ),
+            "Code postal": str(
+                addr_obj.get("zipCode") or addr_obj.get("zip_code")
+                or get_safe(c, "zipCode") or get_safe(c, "zip_code") or ""
+            ),
+            "Ville": (
+                addr_obj.get("city") or addr_obj.get("commune")
+                or get_safe(c, "city") or get_safe(c, "commune") or ""
+            ),
+            "Téléphone": get_safe(c, "phone") or get_safe(c, "phoneNumber") or "",
             "Email": get_safe(c, "email") or "",
             "Site web": get_safe(c, "website") or get_safe(c, "url") or "",
-            "Code NAF": get_safe(c, "naf") or get_safe(c, "code_naf") or "",
+            "Code NAF": (
+                get_safe(c, "naf") or get_safe(c, "nafCode")
+                or get_safe(c, "code_naf") or ""
+            ),
             "Code ROME": "",
-            "Distance Paris 1er (km)": get_safe(c, "distance") or "",
+            "Distance Paris 1er (km)": (
+                get_safe(c, "distance") or get_safe(c, "distanceKm") or ""
+            ),
         })
     return results
 
@@ -479,9 +513,9 @@ def export_excel(rows: list[dict], filepath: str) -> None:
 def main():
     print("=" * 60)
     print("  SCRAPER ALTERNANCE — Paris 1er, 50 km")
-    print("  LBB : NAF 10.71A/B/C/D")
-    print("  LBA : ROME D1102/D1104/D1106/D1101/D1103/G1603")
-    print("  Mode : 150 contacts avec téléphone uniquement")
+    print("  LBB v2 : NAF 10.71A/B/C/D  |  scope: search office api_labonneboitev2")
+    print("  LBA    : ROME D1102/D1104/D1106/D1101/D1103/G1603")
+    print("  Mode   : 150 contacts avec téléphone uniquement")
     print("=" * 60)
 
     # ── LBB : une requête avec tous les codes NAF ──
