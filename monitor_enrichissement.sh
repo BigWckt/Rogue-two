@@ -7,13 +7,33 @@ MONITOR_LOG=/home/user/Rogue-two/monitor_enrichissement.log
 
 echo "[$(date '+%H:%M:%S')] Monitoring démarré" >> "$MONITOR_LOG"
 
+LAST_RECAP=0
+
 while true; do
     RUNNING=$(ps aux | grep "[e]nrichissement_google.py" | wc -l)
     PROGRESS=$(tail -3 "$LOG" 2>/dev/null | grep -oP '\[\s*\d+/1815\]' | tail -1 | tr -d '[]' | xargs)
     ENRICHIS=$(tail -n +2 "$CKPT" 2>/dev/null | awk -F',' '$3 != ""' | wc -l)
+    # Ligne actuelle dans le run total (checkpoint = lignes traitées depuis le début)
+    TOTAL_TRAITES=$(tail -n +2 "$CKPT" 2>/dev/null | wc -l)
+    MILESTONE=$(( (TOTAL_TRAITES / 100) * 100 ))
+
+    # Récap tous les 100 contacts
+    if [ "$MILESTONE" -gt "$LAST_RECAP" ] && [ "$MILESTONE" -gt 0 ]; then
+        LAST_RECAP=$MILESTONE
+        NUMS=$(tail -n +2 "$CKPT" 2>/dev/null | awk -F',' '$3 != ""' | awk -F',' '{print $2, $3}' | head -20)
+        echo "" >> "$MONITOR_LOG"
+        echo "======================================" >> "$MONITOR_LOG"
+        echo "  RECAP — ${MILESTONE} contacts traités" >> "$MONITOR_LOG"
+        echo "  Numéros trouvés : ${ENRICHIS}" >> "$MONITOR_LOG"
+        echo "  Taux : $(echo "scale=1; $ENRICHIS * 100 / $TOTAL_TRAITES" | bc)%" >> "$MONITOR_LOG"
+        echo "  Derniers numéros trouvés :" >> "$MONITOR_LOG"
+        tail -n +2 "$CKPT" | awk -F',' '$3 != ""' | awk -F',' '{print "    " $2 " -> " $3}' >> "$MONITOR_LOG"
+        echo "======================================" >> "$MONITOR_LOG"
+        echo "" >> "$MONITOR_LOG"
+    fi
 
     if [ "$RUNNING" -gt 0 ]; then
-        echo "[$(date '+%H:%M:%S')] En cours — $PROGRESS | Enrichis: $ENRICHIS" >> "$MONITOR_LOG"
+        echo "[$(date '+%H:%M:%S')] En cours — $PROGRESS | Enrichis: $ENRICHIS / $TOTAL_TRAITES traités" >> "$MONITOR_LOG"
     else
         echo "[$(date '+%H:%M:%S')] Script TERMINÉ — $PROGRESS | Enrichis: $ENRICHIS" >> "$MONITOR_LOG"
         echo "DONE" >> "$MONITOR_LOG"
