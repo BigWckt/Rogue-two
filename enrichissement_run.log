@@ -194,3 +194,29 @@
   [ 173/1815] LES CROISES                         31770… —
   [ 174/1815] SAS EAUDISSE                        31600… —
   [ 175/1815] PAULHANI                            31530… OK 0562137452 (118000)
+=================================================================
+  ENRICHISSEMENT TÉLÉPHONIQUE — 118000.fr
+  Source : mbt_villes.xlsx | Lignes sans téléphone
+=================================================================
+  Total lignes fichier    : 3000
+  Lignes sans téléphone   : 1815
+  Déjà traités (checkpoint): 150
+  À traiter               : 1665
+=================================================================
+  [   1/1665] URBLET                              31600… OK 0561565493 (118000)
+  [   2/1665] BOUM BURGER                         31100… OK 0561407773 (118000)
+  [   3/1665] ZAMZAM                              31000… —
+  [   4/1665] DHONI                               31320… —
+  [   5/1665] NOBLADIS                            31700… —
+  [   6/1665] AMARYLIS                            31100… —
+  [   7/1665] SO.DI.GAR.                          31120… —
+  [   8/1665] SODIREV                             31650… —
+  [   9/1665] CARREFOUR HYPERMARCHES              31300… —
+  [  10/1665] UGO                                 31860… —
+  [  11/1665] FRAMADIS                            31150… —
+  [  12/1665] TOTANA                              31130… —
+  [  13/1665] FONSORBES DISTRIBUTION              31470… —
+  [  14/1665] OPALE                               31470… —
+  [  15/1665] CHRISTAL                            31410… —
+  [  16/1665] ALDI MARCHE TOULOUSE                81370… —
+  [  17/1665] FTP                                 31140… —
