@@ -1,5 +1,5 @@
 #!/bin/bash
-# Monitoring toutes les 3 minutes — génère le fichier final quand le script est terminé
+# Monitoring toutes les 5 minutes — relance auto si script arrêté, génère le fichier final quand terminé
 
 LOG=/home/user/Rogue-two/enrichissement_run.log
 CKPT=/home/user/Rogue-two/enrichissement_checkpoint.csv
@@ -34,7 +34,8 @@ while true; do
 
     if [ "$RUNNING" -gt 0 ]; then
         echo "[$(date '+%H:%M:%S')] En cours — $PROGRESS | Enrichis: $ENRICHIS / $TOTAL_TRAITES traités" >> "$MONITOR_LOG"
-    else
+    elif [ "$TOTAL_TRAITES" -ge 1815 ]; then
+        # Toutes les lignes traitées = script vraiment terminé
         echo "[$(date '+%H:%M:%S')] Script TERMINÉ — $PROGRESS | Enrichis: $ENRICHIS" >> "$MONITOR_LOG"
         echo "DONE" >> "$MONITOR_LOG"
 
@@ -68,7 +69,13 @@ https://claude.ai/code/session_01XzkQisFxLhzSw3n843fcRb"
         git push -u origin claude/test-lbba-GgdLH
         echo "[$(date '+%H:%M:%S')] Fichier final poussé — ${ENRICHIS_FINAL} enrichis" >> "$MONITOR_LOG"
         break
+    else
+        # Script arrêté mais pas encore fini — relance auto
+        echo "[$(date '+%H:%M:%S')] ⚠ ALERTE : script arrêté à $TOTAL_TRAITES/1815 — relance automatique..." >> "$MONITOR_LOG"
+        cd /home/user/Rogue-two
+        nohup python3 enrichissement_google.py >> enrichissement_run.log 2>&1 &
+        echo "[$(date '+%H:%M:%S')] Script relancé (PID $!)" >> "$MONITOR_LOG"
     fi
 
-    sleep 180
+    sleep 300
 done
