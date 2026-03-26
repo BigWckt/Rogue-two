@@ -1806,3 +1806,122 @@
 =================================================================
   [   1/415] PLANE PORT VENDRES                  66660… —
   [   2/415] ALSIMA VERNET                       66000… —
+  [   3/415] DISTRIPER                           66000… —
+  [   4/415] CAP SERVICES                        66700… —
+  [   5/415] NESAC                               66700… —
+  [   6/415] FALAUVI                             66140… OK 0468293417 (118000)
+  [   7/415] BOMPADIS                            66430… —
+  [   8/415] DISCOUNTILLE                        66130… OK 0468661380 (118000)
+  [   9/415] MORJAN IDEAL ALIMENTATION           66000… OK 0468849049 (118000)
+  [  10/415] SAINT ES DIS                        66000… —
+  [  11/415] SANERIK                             66170… —
+  [  12/415] SILDIS                              66130… OK 0962323062 (118000)
+  [  13/415] VICO SANTIAGO                       66000… OK 0468378693 (118000)
+  [  14/415] MAUCOURT C ET C                     66000… —
+  [  15/415] LIDL                                66300… —
+  [  16/415] LIDL                                66100… —
+  [  17/415] LIDL                                66160… —
+  [  18/415] SARL COSMOS                         66330… —
+  [  19/415] JAUZAC'REATION                      66000… —
+  [  20/415] PERPIGNAN PETIT MAGASIN SAUVY       66000… —
+  [  21/415] CHAMS                               66000… —
+  [  22/415] SO.BIO                              66330… —
+  [  23/415] MAR DIS                             66140… —
+  [  24/415] LA DEHESA SAINT ESTEVE              66240… —
+  [  25/415] VACS                                66100… OK 0468622016 (118000)
+  [  26/415] LCA                                 66310… —
+  [  27/415] SARL MAISON SOUX                    11370… OK 0468407209 (118000)
+  [  28/415] LA CATALANE D'ABATTAGE              66000… OK 0468512188 (118000)
+  [  29/415] BOSERIEN BREIZH                     66750… —
+  [  30/415] FRAIS DISCOUNT                      66000… OK 0468951518 (118000)
+  [  31/415] COCERDIS                            66400… —
+  [  32/415] GEPI 66                             66000… OK 0468670756 (118000)
+  [  33/415] SOLER DIS                           66270… OK 0468088323 (118000)
+  [  34/415] ASSA.66                             66250… —
+  [  35/415] LA MANO                             66700… —
+  [  36/415] WENDLING THIERRY                    66200… —
+  [  37/415] POMONA                              66600… —
+  [  38/415] SOARDIS                             66700… —
+  [  39/415] LIOCADIS                            66350… OK 0468853225 (118000)
+  [  40/415] PASTA MANO FRANCE                   66000… —
+  [  41/415] AULOFOR                             66450… —
+  [  42/415] LIDL                                66250… —
+  [  43/415] LIDL                                66660… —
+  [  44/415] SOINES                              66130… —
+  [  45/415] MINADIS                             66280… OK 0468229075 (118000)
+  [  46/415] LA CUISINE DU POULETOU              66420… OK 0468288865 (118000)
+  [  47/415] LIDL                                66750… —
+  [  48/415] CIE BOMPASIENNE DE DISTRIBUTION     66750… OK 0468218446 (118000)
+  [  49/415] FUMOLEAU F & R                      66300… —
+  [  50/415] CALAO 70                            66000… —
+
+  ── Checkpoint 50/415 │ 15 trouvés (30.0%) ──
+
+  [  51/415] SOMODIS                             66470… —
+  [  52/415] LIDL                                66380… —
+  [  53/415] BIOMASSANE                          66700… —
+  [  54/415] LE MARKET FELICIEN                  66170… —
+  [  55/415] LE PLAN B                           66000… —
+  [  56/415] PALAZON CHRISTINE                   66440… —
+  [  57/415] STAM HENDRIKUS                      66700… —
+  [  58/415] DGDX                                66690… —
+  [  59/415] SAS GEM                             66750… —
+  [  60/415] PERJO 66                            66600… —
+  [  61/415] MAISON GALBAN                       11370… —
+  [  62/415] MAISON VILA                         66350… OK 0468564625 (118000)
+  [  63/415] SARL ALBA                           66000… —
+  [  64/415] SPL PERPIGNAN MEDITERRANEE          66000… OK 0468532016 (118000)
+  [  65/415] MAISON PARE                         66100… —
+  [  66/415] P.C.B.O                             66100… —
+  [  67/415] FOUGASSE                            66000… —
+  [  68/415] PRALINE                             66600… —
+  [  69/415] NDJP                                66450… OK 0468547570 (118000)
+  [  70/415] LE FOURNIL DE CAMILLE               11370… —
+  [  71/415] FLAM66                              66000… —
+  [  72/415] LE FOURNIL DE JELO                  66350… —
+  [  73/415] LE FOURNIL DE LOJE                  66490… —
+  [  74/415] LE PAIN DU PORT                     66660… —
+  [  75/415] LE FOURNIL DE THUIR                 66300… —
+  [  76/415] ETERNITY SYSTEMS                    66000… —
+  [  77/415] BOULANGERIES BG                     66300… —
+  [  78/415] DAMPAIN                             66200… OK 0468525133 (118000)
+  [  79/415] LA PETITE CATALANE                  66180… —
+  [  80/415] LE FOURNIL DU MOULIN                66100… OK 0468394997 (118000)
+  [  81/415] SUPRA                               66000… —
+  [  82/415] LE FOURNIL DE MILLAS                66170… OK 0468679703 (118000)
+  [  83/415] SAS LES PAINS D'ADRIEN              66200… —
+  [  84/415] LOULILY                             66140… OK 0468594355 (118000)
+  [  85/415] AL FORNIAL                          66200… —
+  [  86/415] DIANE DISTRIBUTION                  66250… OK 0468596534 (118000)
+  [  87/415] SARL L'EPI D'OR                     66430… —
+  [  88/415] LE FOURNIL D'ERIC                   66000… —
+  [  89/415] LA BOITE A ROUSQUILLE               66300… OK 0449013224 (118000)
+  [  90/415] HELIOSPAIN                          66000… OK 0468347554 (118000)
+  [  91/415] DIANE DISTRIBUTION                  66110… OK 0468596534 (118000)
+  [  92/415] BOULANGERIES BG                     66200… —
+  [  93/415] MARYKA                              66330… —
+  [  94/415] RAPHALEX                            66200… OK 0171326982 (118000)
+  [  95/415] BOULANGERIES BG                     66250… —
+  [  96/415] ARGELES                             66700… —
+  [  97/415] AMCE                                66100… —
+  [  98/415] SAS MEDINILLA                       66400… OK 0468956922 (118000)
+  [  99/415] DELICATESS                          66530… OK 0468592423 (118000)
+  [ 100/415] BOULANGERIES BG                     66330… —
+
+  ── Checkpoint 100/415 │ 29 trouvés (29.0%) ──
+
+
+  ── Bilan 100/415 │ 29 trouvés (29.0%) ──
+
+  [ 101/415] COTE BOULANGE                       66000… —
+  [ 102/415] AUX DELICES D'ELOISE                66140… —
+=================================================================
+  ENRICHISSEMENT TÉLÉPHONIQUE — 118000.fr
+  Source : mbt_villes.xlsx | Lignes sans téléphone
+=================================================================
+  Total lignes fichier    : 3000
+  Lignes sans téléphone   : 1815
+  Déjà traités (checkpoint): 1500
+  À traiter               : 315
+=================================================================
+  [   1/315] COTE BOULANGE                       66000… —
