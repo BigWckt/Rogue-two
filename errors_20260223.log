@@ -1,0 +1,323 @@
+2026-02-23 13:52:25,125 - WARNING - Timeout page 1 — hôtel/Toulouse
+2026-02-23 13:52:57,410 - WARNING - Timeout page 1 — hôtel/Blagnac
+2026-02-23 13:53:31,084 - WARNING - Timeout page 1 — hôtel/Colomiers
+2026-02-23 13:54:05,991 - WARNING - Timeout page 1 — hôtel/Muret
+2026-02-23 13:54:40,838 - WARNING - Timeout page 1 — hôtel/Saint-Gaudens
+2026-02-23 13:55:13,388 - WARNING - Timeout page 1 — résidence hôtelière/Toulouse
+2026-02-23 13:55:45,609 - WARNING - Timeout page 1 — résidence hôtelière/Blagnac
+2026-02-23 13:56:19,683 - WARNING - Timeout page 1 — résidence hôtelière/Colomiers
+2026-02-23 13:56:54,250 - WARNING - Timeout page 1 — résidence hôtelière/Muret
+2026-02-23 13:57:28,856 - WARNING - Timeout page 1 — résidence hôtelière/Saint-Gaudens
+2026-02-23 13:58:01,484 - WARNING - Timeout page 1 — appart-hôtel/Toulouse
+2026-02-23 13:58:34,906 - WARNING - Timeout page 1 — appart-hôtel/Blagnac
+2026-02-23 13:59:08,317 - WARNING - Timeout page 1 — appart-hôtel/Colomiers
+2026-02-23 13:59:43,258 - WARNING - Timeout page 1 — appart-hôtel/Muret
+2026-02-23 14:00:16,523 - WARNING - Timeout page 1 — appart-hôtel/Saint-Gaudens
+2026-02-23 14:00:59,899 - WARNING - Timeout page 1 — hôtel/Toulouse
+2026-02-23 14:08:25,793 - WARNING - Timeout page 1 — hôtel/Toulouse
+2026-02-23 14:08:47,303 - WARNING - Timeout page 1 — hôtel/Blagnac
+2026-02-23 14:09:08,365 - WARNING - Timeout page 1 — hôtel/Colomiers
+2026-02-23 14:09:29,806 - WARNING - Timeout page 1 — hôtel/Muret
+2026-02-23 14:09:51,019 - WARNING - Timeout page 1 — hôtel/Saint-Gaudens
+2026-02-23 14:10:12,163 - WARNING - Timeout page 1 — résidence hôtelière/Toulouse
+2026-02-23 14:10:34,058 - WARNING - Timeout page 1 — résidence hôtelière/Blagnac
+2026-02-23 14:10:55,621 - WARNING - Timeout page 1 — résidence hôtelière/Colomiers
+2026-02-23 14:11:17,141 - WARNING - Timeout page 1 — résidence hôtelière/Muret
+2026-02-23 14:11:39,049 - WARNING - Timeout page 1 — résidence hôtelière/Saint-Gaudens
+2026-02-23 14:12:00,802 - WARNING - Timeout page 1 — appart-hôtel/Toulouse
+2026-02-23 14:12:22,765 - WARNING - Timeout page 1 — appart-hôtel/Blagnac
+2026-02-23 14:12:44,734 - WARNING - Timeout page 1 — appart-hôtel/Colomiers
+2026-02-23 14:13:06,216 - WARNING - Timeout page 1 — appart-hôtel/Muret
+2026-02-23 14:13:27,946 - WARNING - Timeout page 1 — appart-hôtel/Saint-Gaudens
+2026-02-23 14:13:41,001 - WARNING - API SIRENE erreur pour 'Hôtel du Gare': HTTPSConnectionPool(host='recherche-entreprises.api.gouv.fr', port=443): Read timed out. (read timeout=10)
+2026-02-23 14:13:52,165 - WARNING - API SIRENE erreur pour 'Hôtel de la Aéroport': HTTPSConnectionPool(host='recherche-entreprises.api.gouv.fr', port=443): Read timed out. (read timeout=10)
+2026-02-23 14:14:03,214 - WARNING - API SIRENE erreur pour 'Hôtel Le République': HTTPSConnectionPool(host='recherche-entreprises.api.gouv.fr', port=443): Read timed out. (read timeout=10)
+2026-02-23 14:14:14,258 - WARNING - API SIRENE erreur pour 'Résidence Opéra': HTTPSConnectionPool(host='recherche-entreprises.api.gouv.fr', port=443): Read timed out. (read timeout=10)
+2026-02-23 14:14:25,306 - WARNING - API SIRENE erreur pour 'Appart-Hôtel Nation': HTTPSConnectionPool(host='recherche-entreprises.api.gouv.fr', port=443): Read timed out. (read timeout=10)
+2026-02-23 14:14:45,831 - WARNING - API SIRENE erreur pour 'Best Western Vincennes': HTTPSConnectionPool(host='recherche-entreprises.api.gouv.fr', port=443): Read timed out. (read timeout=10)
+2026-02-23 14:15:57,058 - WARNING - API SIRENE erreur pour 'Ibis Aéroport': HTTPSConnectionPool(host='recherche-entreprises.api.gouv.fr', port=443): Read timed out. (read timeout=10)
+2026-02-23 14:16:11,264 - WARNING - API SIRENE erreur pour 'Kyriad Nation': HTTPSConnectionPool(host='recherche-entreprises.api.gouv.fr', port=443): Read timed out. (read timeout=10)
+2026-02-23 14:16:22,313 - WARNING - API SIRENE erreur pour 'Campanile Bastille': HTTPSConnectionPool(host='recherche-entreprises.api.gouv.fr', port=443): Read timed out. (read timeout=10)
+2026-02-23 14:16:36,816 - WARNING - API SIRENE erreur pour 'Comfort Inn Belleville': HTTPSConnectionPool(host='recherche-entreprises.api.gouv.fr', port=443): Read timed out. (read timeout=10)
+2026-02-23 14:16:51,360 - WARNING - API SIRENE erreur pour 'B&B Hôtel Panthéon': HTTPSConnectionPool(host='recherche-entreprises.api.gouv.fr', port=443): Read timed out. (read timeout=10)
+2026-02-23 14:17:02,402 - WARNING - API SIRENE erreur pour 'Adagio Odéon': HTTPSConnectionPool(host='recherche-entreprises.api.gouv.fr', port=443): Read timed out. (read timeout=10)
+2026-02-23 14:17:13,550 - WARNING - API SIRENE erreur pour 'Citadines Saint-Michel': HTTPSConnectionPool(host='recherche-entreprises.api.gouv.fr', port=443): Read timed out. (read timeout=10)
+2026-02-23 14:17:30,055 - WARNING - API SIRENE erreur pour 'Hôtel de la Madeleine': HTTPSConnectionPool(host='recherche-entreprises.api.gouv.fr', port=443): Read timed out. (read timeout=10)
+2026-02-23 14:17:46,003 - WARNING - API SIRENE erreur pour 'Ibis Passy': HTTPSConnectionPool(host='recherche-entreprises.api.gouv.fr', port=443): Read timed out. (read timeout=10)
+2026-02-23 14:19:20,152 - WARNING - API SIRENE erreur pour 'Citadines Wilson': HTTPSConnectionPool(host='recherche-entreprises.api.gouv.fr', port=443): Read timed out. (read timeout=10)
+2026-02-23 14:19:32,599 - WARNING - API SIRENE erreur pour 'Hôtel Carmes': HTTPSConnectionPool(host='recherche-entreprises.api.gouv.fr', port=443): Read timed out. (read timeout=10)
+2026-02-23 14:19:45,087 - WARNING - API SIRENE erreur pour 'Hôtel de la Matabiau': HTTPSConnectionPool(host='recherche-entreprises.api.gouv.fr', port=443): Read timed out. (read timeout=10)
+2026-02-23 14:20:01,019 - WARNING - API SIRENE erreur pour 'Ibis Bagatelle': HTTPSConnectionPool(host='recherche-entreprises.api.gouv.fr', port=443): Read timed out. (read timeout=10)
+2026-02-23 14:20:13,618 - WARNING - API SIRENE erreur pour 'Mercure Vieux-Lille': HTTPSConnectionPool(host='recherche-entreprises.api.gouv.fr', port=443): Read timed out. (read timeout=10)
+2026-02-23 14:20:24,671 - WARNING - API SIRENE erreur pour 'Kyriad Flandres': HTTPSConnectionPool(host='recherche-entreprises.api.gouv.fr', port=443): Read timed out. (read timeout=10)
+2026-02-23 14:20:37,217 - WARNING - API SIRENE erreur pour 'Best Western Euralille': HTTPSConnectionPool(host='recherche-entreprises.api.gouv.fr', port=443): Read timed out. (read timeout=10)
+2026-02-23 14:21:31,949 - WARNING - API SIRENE erreur pour 'Citadines Confluence': HTTPSConnectionPool(host='recherche-entreprises.api.gouv.fr', port=443): Read timed out. (read timeout=10)
+2026-02-23 14:22:03,994 - WARNING - API SIRENE erreur pour 'Holiday Inn Vieux-Lille': HTTPSConnectionPool(host='recherche-entreprises.api.gouv.fr', port=443): Read timed out. (read timeout=10)
+2026-02-23 14:22:15,039 - WARNING - API SIRENE erreur pour 'Comfort Inn Flandres': HTTPSConnectionPool(host='recherche-entreprises.api.gouv.fr', port=443): Read timed out. (read timeout=10)
+2026-02-23 14:22:41,148 - WARNING - API SIRENE erreur pour 'Hôtel Le Châtelet': HTTPSConnectionPool(host='recherche-entreprises.api.gouv.fr', port=443): Read timed out. (read timeout=10)
+2026-02-23 14:23:53,062 - WARNING - API SIRENE erreur pour 'Hôtel du Gare 12': HTTPSConnectionPool(host='recherche-entreprises.api.gouv.fr', port=443): Read timed out. (read timeout=10)
+2026-02-23 14:24:07,546 - WARNING - API SIRENE erreur pour 'Résidence Opéra 12': HTTPSConnectionPool(host='recherche-entreprises.api.gouv.fr', port=443): Read timed out. (read timeout=10)
+2026-02-23 14:24:18,710 - WARNING - API SIRENE erreur pour 'Appart-Hôtel Nation 12': HTTPSConnectionPool(host='recherche-entreprises.api.gouv.fr', port=443): Read timed out. (read timeout=10)
+2026-02-23 14:24:34,601 - WARNING - API SIRENE erreur pour 'Kyriad Belleville 12': HTTPSConnectionPool(host='recherche-entreprises.api.gouv.fr', port=443): Read timed out. (read timeout=10)
+2026-02-23 14:24:49,190 - WARNING - API SIRENE erreur pour 'Holiday Inn Panthéon 12': HTTPSConnectionPool(host='recherche-entreprises.api.gouv.fr', port=443): Read timed out. (read timeout=10)
+2026-02-23 14:25:08,553 - WARNING - API SIRENE erreur pour 'Citadines Madeleine 12': HTTPSConnectionPool(host='recherche-entreprises.api.gouv.fr', port=443): Read timed out. (read timeout=10)
+2026-02-23 14:25:24,554 - WARNING - API SIRENE erreur pour 'Hôtel de la Passy 13': HTTPSConnectionPool(host='recherche-entreprises.api.gouv.fr', port=443): Read timed out. (read timeout=10)
+2026-02-23 14:26:04,727 - WARNING - API SIRENE erreur pour 'Hôtel du Flandres 14': HTTPSConnectionPool(host='recherche-entreprises.api.gouv.fr', port=443): Read timed out. (read timeout=10)
+2026-02-23 14:26:34,401 - WARNING - API SIRENE erreur pour 'Comfort Inn Belleville 14': HTTPSConnectionPool(host='recherche-entreprises.api.gouv.fr', port=443): Read timed out. (read timeout=10)
+2026-02-23 14:26:55,310 - WARNING - API SIRENE erreur pour 'Hôtel Batignolles 15': HTTPSConnectionPool(host='recherche-entreprises.api.gouv.fr', port=443): Read timed out. (read timeout=10)
+2026-02-23 14:27:06,370 - WARNING - API SIRENE erreur pour 'Hôtel du Grands Boulevards 15': HTTPSConnectionPool(host='recherche-entreprises.api.gouv.fr', port=443): Read timed out. (read timeout=10)
+2026-02-23 14:27:28,173 - WARNING - API SIRENE erreur pour 'Mercure Boulogne 15': HTTPSConnectionPool(host='recherche-entreprises.api.gouv.fr', port=443): Read timed out. (read timeout=10)
+2026-02-23 14:27:43,996 - WARNING - API SIRENE erreur pour 'Holiday Inn Presqu'île 15': HTTPSConnectionPool(host='recherche-entreprises.api.gouv.fr', port=443): Read timed out. (read timeout=10)
+2026-02-23 14:27:55,488 - INFO - [Hotels_31] Doublon supprimé: Hôtel Le Auteuil (31600)
+2026-02-23 14:27:55,488 - INFO - [Hotels_31] Doublon supprimé: Hôtel Vieux-Lille (31170)
+2026-02-23 14:27:55,488 - INFO - [Hotels_31] Doublon supprimé: Hôtel du Flandres (31270)
+2026-02-23 14:27:55,488 - INFO - [Hotels_31] Doublon supprimé: Hôtel Batignolles (31000)
+2026-02-23 14:27:55,488 - INFO - [Hotels_31] Doublon supprimé: Résidence Vieux-Lille (31800)
+2026-02-23 14:27:55,488 - INFO - [Hotels_31] Doublon supprimé: Hôtel de la Saint-Michel (31120)
+2026-02-23 14:27:55,488 - INFO - [Hotels_31] Doublon supprimé: Hôtel Montmartre (31500)
+2026-02-23 14:27:55,488 - INFO - [Hotels_31] Doublon supprimé: Hôtel du Belleville (31700)
+2026-02-23 14:27:55,488 - INFO - [Hotels_31] Doublon supprimé: Hôtel de la Bastille (31200)
+2026-02-23 14:27:55,488 - INFO - [Hotels_31] Doublon supprimé: Résidence Montmartre (31400)
+2026-02-23 14:27:55,488 - INFO - [Hotels_31] Doublon supprimé: Hôtel du La Défense (31700)
+2026-02-23 14:27:55,488 - INFO - [Hotels_31] Doublon supprimé: Hôtel Le Part-Dieu (31600)
+2026-02-23 14:27:55,488 - INFO - [Hotels_31] Doublon supprimé: Hôtel Vieux-Lille 14 (31500)
+2026-02-23 14:27:55,489 - INFO - [Hotels_31] Doublon supprimé: Résidence Centre 14 (31800)
+2026-02-23 14:27:55,489 - INFO - [Hotels_31] Doublon supprimé: Hôtel de la Madeleine 15 (31120)
+2026-02-23 14:27:55,489 - INFO - [Hotels_31] Doublon supprimé: Hôtel Le Concorde 15 (31130)
+2026-02-23 14:27:55,489 - INFO - [Hotels_31] Doublon supprimé: Résidence Eiffel 15 (31240)
+2026-02-23 14:28:20,643 - WARNING - Timeout page 1 — hôtel/Paris 1er
+2026-02-23 14:28:42,416 - WARNING - Timeout page 1 — hôtel/Paris 2ème
+2026-02-23 14:29:04,400 - WARNING - Timeout page 1 — hôtel/Paris 3ème
+2026-02-23 14:29:26,166 - WARNING - Timeout page 1 — hôtel/Paris 4ème
+2026-02-23 14:29:47,188 - WARNING - Timeout page 1 — hôtel/Paris 5ème
+2026-02-23 14:30:09,000 - WARNING - Timeout page 1 — hôtel/Paris 6ème
+2026-02-23 14:30:30,237 - WARNING - Timeout page 1 — hôtel/Paris 7ème
+2026-02-23 14:30:52,096 - WARNING - Timeout page 1 — hôtel/Paris 8ème
+2026-02-23 14:31:13,433 - WARNING - Timeout page 1 — hôtel/Paris 9ème
+2026-02-23 14:31:35,118 - WARNING - Timeout page 1 — hôtel/Paris 10ème
+2026-02-23 14:31:56,975 - WARNING - Timeout page 1 — hôtel/Paris 11ème
+2026-02-23 14:32:18,546 - WARNING - Timeout page 1 — hôtel/Paris 12ème
+2026-02-23 14:32:40,100 - WARNING - Timeout page 1 — hôtel/Paris 13ème
+2026-02-23 14:33:01,764 - WARNING - Timeout page 1 — hôtel/Paris 14ème
+2026-02-23 14:33:23,586 - WARNING - Timeout page 1 — hôtel/Paris 15ème
+2026-02-23 14:33:44,849 - WARNING - Timeout page 1 — hôtel/Paris 16ème
+2026-02-23 14:34:06,124 - WARNING - Timeout page 1 — hôtel/Paris 17ème
+2026-02-23 14:34:27,263 - WARNING - Timeout page 1 — hôtel/Paris 18ème
+2026-02-23 14:34:48,973 - WARNING - Timeout page 1 — hôtel/Paris 19ème
+2026-02-23 14:35:10,338 - WARNING - Timeout page 1 — hôtel/Paris 20ème
+2026-02-23 14:35:31,509 - WARNING - Timeout page 1 — résidence hôtelière/Paris 1er
+2026-02-23 14:35:53,385 - WARNING - Timeout page 1 — résidence hôtelière/Paris 2ème
+2026-02-23 14:36:15,221 - WARNING - Timeout page 1 — résidence hôtelière/Paris 3ème
+2026-02-23 14:36:36,544 - WARNING - Timeout page 1 — résidence hôtelière/Paris 4ème
+2026-02-23 14:36:57,697 - WARNING - Timeout page 1 — résidence hôtelière/Paris 5ème
+2026-02-23 14:37:19,254 - WARNING - Timeout page 1 — résidence hôtelière/Paris 6ème
+2026-02-23 14:37:40,466 - WARNING - Timeout page 1 — résidence hôtelière/Paris 7ème
+2026-02-23 14:38:02,051 - WARNING - Timeout page 1 — résidence hôtelière/Paris 8ème
+2026-02-23 14:38:23,250 - WARNING - Timeout page 1 — résidence hôtelière/Paris 9ème
+2026-02-23 14:38:44,951 - WARNING - Timeout page 1 — résidence hôtelière/Paris 10ème
+2026-02-23 14:39:06,022 - WARNING - Timeout page 1 — résidence hôtelière/Paris 11ème
+2026-02-23 14:39:27,402 - WARNING - Timeout page 1 — résidence hôtelière/Paris 12ème
+2026-02-23 14:39:48,440 - WARNING - Timeout page 1 — résidence hôtelière/Paris 13ème
+2026-02-23 14:40:09,499 - WARNING - Timeout page 1 — résidence hôtelière/Paris 14ème
+2026-02-23 14:40:31,064 - WARNING - Timeout page 1 — résidence hôtelière/Paris 15ème
+2026-02-23 14:40:52,830 - WARNING - Timeout page 1 — résidence hôtelière/Paris 16ème
+2026-02-23 14:41:14,686 - WARNING - Timeout page 1 — résidence hôtelière/Paris 17ème
+2026-02-23 14:41:35,984 - WARNING - Timeout page 1 — résidence hôtelière/Paris 18ème
+2026-02-23 14:41:57,871 - WARNING - Timeout page 1 — résidence hôtelière/Paris 19ème
+2026-02-23 14:42:19,670 - WARNING - Timeout page 1 — résidence hôtelière/Paris 20ème
+2026-02-23 14:42:41,444 - WARNING - Timeout page 1 — appart-hôtel/Paris 1er
+2026-02-23 14:43:03,032 - WARNING - Timeout page 1 — appart-hôtel/Paris 2ème
+2026-02-23 14:43:24,198 - WARNING - Timeout page 1 — appart-hôtel/Paris 3ème
+2026-02-23 14:43:46,124 - WARNING - Timeout page 1 — appart-hôtel/Paris 4ème
+2026-02-23 14:44:07,868 - WARNING - Timeout page 1 — appart-hôtel/Paris 5ème
+2026-02-23 14:44:28,981 - WARNING - Timeout page 1 — appart-hôtel/Paris 6ème
+2026-02-23 14:44:50,823 - WARNING - Timeout page 1 — appart-hôtel/Paris 7ème
+2026-02-23 14:45:12,824 - WARNING - Timeout page 1 — appart-hôtel/Paris 8ème
+2026-02-23 14:45:34,566 - WARNING - Timeout page 1 — appart-hôtel/Paris 9ème
+2026-02-23 14:45:56,373 - WARNING - Timeout page 1 — appart-hôtel/Paris 10ème
+2026-02-23 14:46:18,333 - WARNING - Timeout page 1 — appart-hôtel/Paris 11ème
+2026-02-23 14:46:39,945 - WARNING - Timeout page 1 — appart-hôtel/Paris 12ème
+2026-02-23 14:47:01,150 - WARNING - Timeout page 1 — appart-hôtel/Paris 13ème
+2026-02-23 14:47:22,554 - WARNING - Timeout page 1 — appart-hôtel/Paris 14ème
+2026-02-23 14:47:44,346 - WARNING - Timeout page 1 — appart-hôtel/Paris 15ème
+2026-02-23 14:48:05,728 - WARNING - Timeout page 1 — appart-hôtel/Paris 16ème
+2026-02-23 14:48:27,718 - WARNING - Timeout page 1 — appart-hôtel/Paris 17ème
+2026-02-23 14:48:48,813 - WARNING - Timeout page 1 — appart-hôtel/Paris 18ème
+2026-02-23 14:49:10,730 - WARNING - Timeout page 1 — appart-hôtel/Paris 19ème
+2026-02-23 14:49:32,141 - WARNING - Timeout page 1 — appart-hôtel/Paris 20ème
+2026-02-23 14:58:57,102 - INFO - [Hotels_75] Doublon supprimé: Résidence Vieux-Lille (75005)
+2026-02-23 14:58:57,103 - INFO - [Hotels_75] Doublon supprimé: Hôtel du Capitole (75002)
+2026-02-23 14:58:57,103 - INFO - [Hotels_75] Doublon supprimé: Hôtel Boulogne (75001)
+2026-02-23 14:58:57,103 - INFO - [Hotels_75] Doublon supprimé: Résidence Presqu'île (75005)
+2026-02-23 14:58:57,103 - INFO - [Hotels_75] Doublon supprimé: Hôtel Vieux-Lille 14 (75001)
+2026-02-23 14:58:57,103 - INFO - [Hotels_75] Doublon supprimé: Hôtel du Flandres 14 (75002)
+2026-02-23 14:58:57,104 - INFO - [Hotels_75] Doublon supprimé: Hôtel du Grands Boulevards 15 (75002)
+2026-02-23 14:58:57,104 - INFO - [Hotels_75] Doublon supprimé: Hôtel Le Concorde 15 (75004)
+2026-02-23 14:59:24,719 - WARNING - Timeout page 1 — hôtel/Saint-Denis
+2026-02-23 14:59:46,697 - WARNING - Timeout page 1 — hôtel/Bobigny
+2026-02-23 15:00:07,779 - WARNING - Timeout page 1 — hôtel/Montreuil
+2026-02-23 15:00:29,288 - WARNING - Timeout page 1 — hôtel/Aubervilliers
+2026-02-23 15:00:51,090 - WARNING - Timeout page 1 — hôtel/Pantin
+2026-02-23 15:01:12,854 - WARNING - Timeout page 1 — hôtel/Créteil
+2026-02-23 15:01:33,950 - WARNING - Timeout page 1 — hôtel/Vincennes
+2026-02-23 15:01:55,288 - WARNING - Timeout page 1 — hôtel/Vitry-sur-Seine
+2026-02-23 15:02:17,253 - WARNING - Timeout page 1 — hôtel/Ivry-sur-Seine
+2026-02-23 15:02:38,972 - WARNING - Timeout page 1 — hôtel/Champigny-sur-Marne
+2026-02-23 15:03:00,208 - WARNING - Timeout page 1 — résidence hôtelière/Saint-Denis
+2026-02-23 15:03:21,500 - WARNING - Timeout page 1 — résidence hôtelière/Bobigny
+2026-02-23 15:03:42,706 - WARNING - Timeout page 1 — résidence hôtelière/Montreuil
+2026-02-23 15:04:04,464 - WARNING - Timeout page 1 — résidence hôtelière/Aubervilliers
+2026-02-23 15:04:25,793 - WARNING - Timeout page 1 — résidence hôtelière/Pantin
+2026-02-23 15:04:46,999 - WARNING - Timeout page 1 — résidence hôtelière/Créteil
+2026-02-23 15:05:08,583 - WARNING - Timeout page 1 — résidence hôtelière/Vincennes
+2026-02-23 15:05:29,622 - WARNING - Timeout page 1 — résidence hôtelière/Vitry-sur-Seine
+2026-02-23 15:05:50,905 - WARNING - Timeout page 1 — résidence hôtelière/Ivry-sur-Seine
+2026-02-23 15:06:12,751 - WARNING - Timeout page 1 — résidence hôtelière/Champigny-sur-Marne
+2026-02-23 15:06:34,337 - WARNING - Timeout page 1 — appart-hôtel/Saint-Denis
+2026-02-23 15:06:55,430 - WARNING - Timeout page 1 — appart-hôtel/Bobigny
+2026-02-23 15:07:17,389 - WARNING - Timeout page 1 — appart-hôtel/Montreuil
+2026-02-23 15:07:38,695 - WARNING - Timeout page 1 — appart-hôtel/Aubervilliers
+2026-02-23 15:08:00,506 - WARNING - Timeout page 1 — appart-hôtel/Pantin
+2026-02-23 15:08:22,302 - WARNING - Timeout page 1 — appart-hôtel/Créteil
+2026-02-23 15:08:43,984 - WARNING - Timeout page 1 — appart-hôtel/Vincennes
+2026-02-23 15:09:05,064 - WARNING - Timeout page 1 — appart-hôtel/Vitry-sur-Seine
+2026-02-23 15:09:26,826 - WARNING - Timeout page 1 — appart-hôtel/Ivry-sur-Seine
+2026-02-23 15:09:48,261 - WARNING - Timeout page 1 — appart-hôtel/Champigny-sur-Marne
+2026-02-23 15:18:05,921 - INFO - [Hotels_93-94] Doublon supprimé: Hôtel Le Auteuil (93600)
+2026-02-23 15:18:05,921 - INFO - [Hotels_93-94] Doublon supprimé: Résidence Boulogne (94000)
+2026-02-23 15:18:05,921 - INFO - [Hotels_93-94] Doublon supprimé: Hôtel Vieux-Lille (94000)
+2026-02-23 15:18:05,922 - INFO - [Hotels_93-94] Doublon supprimé: Hôtel du Flandres (94300)
+2026-02-23 15:18:05,922 - INFO - [Hotels_93-94] Doublon supprimé: Hôtel Batignolles (94500)
+2026-02-23 15:18:05,922 - INFO - [Hotels_93-94] Doublon supprimé: Hôtel du Grands Boulevards (94100)
+2026-02-23 15:18:05,922 - INFO - [Hotels_93-94] Doublon supprimé: Hôtel de la Madeleine (94140)
+2026-02-23 15:18:05,922 - INFO - [Hotels_93-94] Doublon supprimé: Hôtel Le Concorde (94700)
+2026-02-23 15:18:05,922 - INFO - [Hotels_93-94] Doublon supprimé: Résidence Vieux-Lille (93500)
+2026-02-23 15:18:05,922 - INFO - [Hotels_93-94] Doublon supprimé: Hôtel de la Saint-Michel (93160)
+2026-02-23 15:18:05,922 - INFO - [Hotels_93-94] Doublon supprimé: Résidence Batignolles (94000)
+2026-02-23 15:18:05,922 - INFO - [Hotels_93-94] Doublon supprimé: Hôtel du Minimes (94300)
+2026-02-23 15:18:05,922 - INFO - [Hotels_93-94] Doublon supprimé: Hôtel Le Purpan (94200)
+2026-02-23 15:18:05,922 - INFO - [Hotels_93-94] Doublon supprimé: Hôtel du Belleville (94100)
+2026-02-23 15:18:05,922 - INFO - [Hotels_93-94] Doublon supprimé: Hôtel du Capitole (93000)
+2026-02-23 15:18:05,922 - INFO - [Hotels_93-94] Doublon supprimé: Hôtel Le Compans (93300)
+2026-02-23 15:18:05,923 - INFO - [Hotels_93-94] Doublon supprimé: Hôtel Opéra (93500)
+2026-02-23 15:18:05,923 - INFO - [Hotels_93-94] Doublon supprimé: Hôtel Le Châtelet (93600)
+2026-02-23 15:18:05,923 - INFO - [Hotels_93-94] Doublon supprimé: Résidence Montmartre (94000)
+2026-02-23 15:18:05,923 - INFO - [Hotels_93-94] Doublon supprimé: Hôtel Boulogne (94000)
+2026-02-23 15:18:05,923 - INFO - [Hotels_93-94] Doublon supprimé: Hôtel du La Défense (94300)
+2026-02-23 15:18:05,923 - INFO - [Hotels_93-94] Doublon supprimé: Hôtel Le Part-Dieu (94200)
+2026-02-23 15:18:05,923 - INFO - [Hotels_93-94] Doublon supprimé: Hôtel Le République 12 (94700)
+2026-02-23 15:18:05,923 - INFO - [Hotels_93-94] Doublon supprimé: Hôtel Vieux-Lille 14 (93500)
+2026-02-23 15:18:05,923 - INFO - [Hotels_93-94] Doublon supprimé: Hôtel du Flandres 14 (93400)
+2026-02-23 15:18:05,923 - INFO - [Hotels_93-94] Doublon supprimé: Hôtel de la Europe 14 (93160)
+2026-02-23 15:18:05,923 - INFO - [Hotels_93-94] Doublon supprimé: Résidence Centre 14 (94000)
+2026-02-23 15:18:05,923 - INFO - [Hotels_93-94] Doublon supprimé: Hôtel Batignolles 15 (94000)
+2026-02-23 15:18:05,923 - INFO - [Hotels_93-94] Doublon supprimé: Hôtel du Grands Boulevards 15 (94300)
+2026-02-23 15:18:05,923 - INFO - [Hotels_93-94] Doublon supprimé: Hôtel de la Madeleine 15 (94400)
+2026-02-23 15:18:05,923 - INFO - [Hotels_93-94] Doublon supprimé: Hôtel Le Concorde 15 (94200)
+2026-02-23 15:18:05,923 - INFO - [Hotels_93-94] Doublon supprimé: Résidence Eiffel 15 (94500)
+2026-02-23 15:18:30,646 - WARNING - Timeout page 1 — hôtel/Lille
+2026-02-23 15:18:51,875 - WARNING - Timeout page 1 — hôtel/Roubaix
+2026-02-23 15:19:13,009 - WARNING - Timeout page 1 — hôtel/Tourcoing
+2026-02-23 15:19:34,513 - WARNING - Timeout page 1 — hôtel/Valenciennes
+2026-02-23 15:19:55,698 - WARNING - Timeout page 1 — hôtel/Dunkerque
+2026-02-23 15:20:17,578 - WARNING - Timeout page 1 — hôtel/Douai
+2026-02-23 15:20:39,223 - WARNING - Timeout page 1 — résidence hôtelière/Lille
+2026-02-23 15:21:00,852 - WARNING - Timeout page 1 — résidence hôtelière/Roubaix
+2026-02-23 15:21:22,638 - WARNING - Timeout page 1 — résidence hôtelière/Tourcoing
+2026-02-23 15:21:44,316 - WARNING - Timeout page 1 — résidence hôtelière/Valenciennes
+2026-02-23 15:22:05,848 - WARNING - Timeout page 1 — résidence hôtelière/Dunkerque
+2026-02-23 15:22:27,684 - WARNING - Timeout page 1 — résidence hôtelière/Douai
+2026-02-23 15:22:48,951 - WARNING - Timeout page 1 — appart-hôtel/Lille
+2026-02-23 15:23:10,624 - WARNING - Timeout page 1 — appart-hôtel/Roubaix
+2026-02-23 15:23:32,510 - WARNING - Timeout page 1 — appart-hôtel/Tourcoing
+2026-02-23 15:23:53,547 - WARNING - Timeout page 1 — appart-hôtel/Valenciennes
+2026-02-23 15:24:14,731 - WARNING - Timeout page 1 — appart-hôtel/Dunkerque
+2026-02-23 15:24:36,339 - WARNING - Timeout page 1 — appart-hôtel/Douai
+2026-02-23 15:24:57,646 - WARNING - Timeout page 1 — centre de congrès/Lille
+2026-02-23 15:25:18,993 - WARNING - Timeout page 1 — centre de congrès/Roubaix
+2026-02-23 15:25:40,025 - WARNING - Timeout page 1 — centre de congrès/Tourcoing
+2026-02-23 15:26:01,280 - WARNING - Timeout page 1 — centre de congrès/Valenciennes
+2026-02-23 15:26:22,528 - WARNING - Timeout page 1 — centre de congrès/Dunkerque
+2026-02-23 15:26:44,044 - WARNING - Timeout page 1 — centre de congrès/Douai
+2026-02-23 15:34:58,081 - INFO - [Hotels_59] Doublon supprimé: Hôtel Batignolles (59600)
+2026-02-23 15:34:58,082 - INFO - [Hotels_59] Doublon supprimé: Hôtel du Minimes (59300)
+2026-02-23 15:34:58,082 - INFO - [Hotels_59] Doublon supprimé: Hôtel Le Purpan (59500)
+2026-02-23 15:34:58,082 - INFO - [Hotels_59] Doublon supprimé: Hôtel Le Vincennes (59000)
+2026-02-23 15:34:58,082 - INFO - [Hotels_59] Doublon supprimé: Hôtel du Capitole (59140)
+2026-02-23 15:34:58,082 - INFO - [Hotels_59] Doublon supprimé: Hôtel Le Compans (59650)
+2026-02-23 15:34:58,082 - INFO - [Hotels_59] Doublon supprimé: Hôtel de la Bastille (59000)
+2026-02-23 15:34:58,082 - INFO - [Hotels_59] Doublon supprimé: Hôtel Le Châtelet (59800)
+2026-02-23 15:34:58,082 - INFO - [Hotels_59] Doublon supprimé: Résidence Montmartre (59100)
+2026-02-23 15:34:58,082 - INFO - [Hotels_59] Doublon supprimé: Hôtel Boulogne (59140)
+2026-02-23 15:34:58,082 - INFO - [Hotels_59] Doublon supprimé: Hôtel Le Part-Dieu (59600)
+2026-02-23 15:34:58,083 - INFO - [Hotels_59] Doublon supprimé: Hôtel Vieux-Lille 14 (59000)
+2026-02-23 15:34:58,083 - INFO - [Hotels_59] Doublon supprimé: Hôtel du Flandres 14 (59800)
+2026-02-23 15:34:58,083 - INFO - [Hotels_59] Doublon supprimé: Hôtel de la Europe 14 (59100)
+2026-02-23 15:34:58,083 - INFO - [Hotels_59] Doublon supprimé: Hôtel Batignolles 15 (59650)
+2026-02-23 15:34:58,083 - INFO - [Hotels_59] Doublon supprimé: Hôtel du Grands Boulevards 15 (59600)
+2026-02-23 15:34:58,083 - INFO - [Hotels_59] Doublon supprimé: Hôtel de la Madeleine 15 (59100)
+2026-02-23 15:35:22,342 - WARNING - Timeout page 1 — cabinet d'avocats/Nanterre
+2026-02-23 15:35:44,088 - WARNING - Timeout page 1 — cabinet d'avocats/Boulogne-Billancourt
+2026-02-23 15:36:05,777 - WARNING - Timeout page 1 — cabinet d'avocats/Neuilly-sur-Seine
+2026-02-23 15:36:27,541 - WARNING - Timeout page 1 — cabinet d'avocats/Issy-les-Moulineaux
+2026-02-23 15:36:49,129 - WARNING - Timeout page 1 — cabinet d'avocats/Levallois-Perret
+2026-02-23 15:37:10,367 - WARNING - Timeout page 1 — cabinet d'avocats/Courbevoie
+2026-02-23 15:37:31,901 - WARNING - Timeout page 1 — cabinet d'avocats/Asnières-sur-Seine
+2026-02-23 15:37:53,804 - WARNING - Timeout page 1 — étude notariale/Nanterre
+2026-02-23 15:38:15,089 - WARNING - Timeout page 1 — étude notariale/Boulogne-Billancourt
+2026-02-23 15:38:36,333 - WARNING - Timeout page 1 — étude notariale/Neuilly-sur-Seine
+2026-02-23 15:38:58,089 - WARNING - Timeout page 1 — étude notariale/Issy-les-Moulineaux
+2026-02-23 15:39:19,518 - WARNING - Timeout page 1 — étude notariale/Levallois-Perret
+2026-02-23 15:39:41,097 - WARNING - Timeout page 1 — étude notariale/Courbevoie
+2026-02-23 15:40:02,480 - WARNING - Timeout page 1 — étude notariale/Asnières-sur-Seine
+2026-02-23 15:40:24,477 - WARNING - Timeout page 1 — agence immobilière/Nanterre
+2026-02-23 15:40:46,100 - WARNING - Timeout page 1 — agence immobilière/Boulogne-Billancourt
+2026-02-23 15:41:07,464 - WARNING - Timeout page 1 — agence immobilière/Neuilly-sur-Seine
+2026-02-23 15:41:29,146 - WARNING - Timeout page 1 — agence immobilière/Issy-les-Moulineaux
+2026-02-23 15:41:50,190 - WARNING - Timeout page 1 — agence immobilière/Levallois-Perret
+2026-02-23 15:42:12,009 - WARNING - Timeout page 1 — agence immobilière/Courbevoie
+2026-02-23 15:42:33,942 - WARNING - Timeout page 1 — agence immobilière/Asnières-sur-Seine
+2026-02-23 15:42:55,675 - WARNING - Timeout page 1 — administrateur de biens/Nanterre
+2026-02-23 15:43:17,652 - WARNING - Timeout page 1 — administrateur de biens/Boulogne-Billancourt
+2026-02-23 15:43:38,995 - WARNING - Timeout page 1 — administrateur de biens/Neuilly-sur-Seine
+2026-02-23 15:44:00,375 - WARNING - Timeout page 1 — administrateur de biens/Issy-les-Moulineaux
+2026-02-23 15:44:21,840 - WARNING - Timeout page 1 — administrateur de biens/Levallois-Perret
+2026-02-23 15:44:43,419 - WARNING - Timeout page 1 — administrateur de biens/Courbevoie
+2026-02-23 15:45:04,677 - WARNING - Timeout page 1 — administrateur de biens/Asnières-sur-Seine
+2026-02-23 15:45:26,480 - WARNING - Timeout page 1 — promoteur immobilier/Nanterre
+2026-02-23 15:45:47,569 - WARNING - Timeout page 1 — promoteur immobilier/Boulogne-Billancourt
+2026-02-23 15:46:09,349 - WARNING - Timeout page 1 — promoteur immobilier/Neuilly-sur-Seine
+2026-02-23 15:46:30,976 - WARNING - Timeout page 1 — promoteur immobilier/Issy-les-Moulineaux
+2026-02-23 15:46:52,052 - WARNING - Timeout page 1 — promoteur immobilier/Levallois-Perret
+2026-02-23 15:47:13,835 - WARNING - Timeout page 1 — promoteur immobilier/Courbevoie
+2026-02-23 15:47:34,996 - WARNING - Timeout page 1 — promoteur immobilier/Asnières-sur-Seine
+2026-02-23 15:55:52,782 - INFO - [Juridique_Immo_92] Doublon supprimé: Cabinet Expertises 12 (92000)
+2026-02-23 15:55:52,782 - INFO - [Juridique_Immo_92] Doublon supprimé: SELARL & Associés 14 (92300)
+2026-02-23 15:55:52,782 - INFO - [Juridique_Immo_92] Doublon supprimé: Cabinet immobilier Patrimoine 15 (92140)
+2026-02-23 15:55:52,782 - INFO - [Juridique_Immo_92] Doublon supprimé: SCP Conseils 18 (92130)
+2026-02-23 15:56:17,365 - WARNING - Timeout page 1 — centre d'appels/Lille
+2026-02-23 15:56:39,294 - WARNING - Timeout page 1 — centre d'appels/Roubaix
+2026-02-23 15:57:01,022 - WARNING - Timeout page 1 — centre d'appels/Tourcoing
+2026-02-23 15:57:22,801 - WARNING - Timeout page 1 — centre d'appels/Villeneuve-d'Ascq
+2026-02-23 15:57:44,071 - WARNING - Timeout page 1 — centre d'appels/Valenciennes
+2026-02-23 15:58:05,094 - WARNING - Timeout page 1 — call center/Lille
+2026-02-23 15:58:26,604 - WARNING - Timeout page 1 — call center/Roubaix
+2026-02-23 15:58:48,247 - WARNING - Timeout page 1 — call center/Tourcoing
+2026-02-23 15:59:09,330 - WARNING - Timeout page 1 — call center/Villeneuve-d'Ascq
+2026-02-23 15:59:30,692 - WARNING - Timeout page 1 — call center/Valenciennes
+2026-02-23 15:59:51,986 - WARNING - Timeout page 1 — télémarketing/Lille
+2026-02-23 16:00:13,097 - WARNING - Timeout page 1 — télémarketing/Roubaix
+2026-02-23 16:00:34,260 - WARNING - Timeout page 1 — télémarketing/Tourcoing
+2026-02-23 16:00:55,544 - WARNING - Timeout page 1 — télémarketing/Villeneuve-d'Ascq
+2026-02-23 16:01:16,656 - WARNING - Timeout page 1 — télémarketing/Valenciennes
+2026-02-23 16:01:37,968 - WARNING - Timeout page 1 — service client externalisé/Lille
+2026-02-23 16:01:59,291 - WARNING - Timeout page 1 — service client externalisé/Roubaix
+2026-02-23 16:02:20,690 - WARNING - Timeout page 1 — service client externalisé/Tourcoing
+2026-02-23 16:02:42,152 - WARNING - Timeout page 1 — service client externalisé/Villeneuve-d'Ascq
+2026-02-23 16:03:03,826 - WARNING - Timeout page 1 — service client externalisé/Valenciennes
+2026-02-23 16:03:25,154 - WARNING - Timeout page 1 — BPO/Lille
+2026-02-23 16:03:46,581 - WARNING - Timeout page 1 — BPO/Roubaix
+2026-02-23 16:04:08,452 - WARNING - Timeout page 1 — BPO/Tourcoing
+2026-02-23 16:04:30,213 - WARNING - Timeout page 1 — BPO/Villeneuve-d'Ascq
+2026-02-23 16:04:51,381 - WARNING - Timeout page 1 — BPO/Valenciennes
+2026-02-23 16:12:53,200 - INFO - [CallCenter_59] Doublon supprimé: Arvato France (59200)
