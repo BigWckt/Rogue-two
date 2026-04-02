@@ -1,4 +1,6 @@
 # Result files
 lba_lbb_results_*.xlsx
 lba_lbb_results_*.csv
+pj_results_*.xlsx
+pj_results_*.csv
 *_backup.csv
