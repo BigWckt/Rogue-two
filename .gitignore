@@ -1,0 +1,4 @@
+# Result files
+lba_lbb_results_*.xlsx
+lba_lbb_results_*.csv
+*_backup.csv
