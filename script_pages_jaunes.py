@@ -3,7 +3,12 @@
 script_pages_jaunes.py — Scraping Pages Jaunes
 ===============================================
 Collecte des entreprises sur Pages Jaunes par activité et ville,
-via Playwright (headless Chromium) pour contourner la protection Cloudflare.
+via Playwright (headless Chromium) avec bypass Cloudflare Turnstile.
+
+Technique : warmup sur une URL PJ bidon, attente adaptative du titre
+(pas de sleep fixe), puis scraping des résultats page par page.
+
+Ref : README_scraper_pj.md — issu du scraper en production (3 329 fiches).
 
 Usage :
   python script_pages_jaunes.py --ville Paris --activite "boulangerie" --nb-max 100
@@ -56,13 +61,13 @@ EXCEL_COLUMNS = [
 PJ_BASE_URL = "https://www.pagesjaunes.fr"
 SAVE_EVERY = 50
 MAX_EMPTY_PAGES = 3
+DELAY_SAME_KEYWORD = 5    # secondes entre deux pages du même mot-clé
+DELAY_BETWEEN_KEYWORDS = 8  # secondes entre deux mots-clés différents
+CF_POLL_INTERVAL = 5       # secondes entre chaque vérif du titre CF
+CF_TIMEOUT = 90            # timeout max pour le challenge CF
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
-
-def random_delay(min_s=1.0, max_s=3.0):
-    time.sleep(random.uniform(min_s, max_s))
-
 
 def extract_cp_ville(adresse: str) -> tuple[str, str]:
     """Extrait code postal et ville depuis une adresse texte."""
@@ -74,20 +79,29 @@ def extract_cp_ville(adresse: str) -> tuple[str, str]:
     return "", ""
 
 
+def validate_phone(raw: str) -> str:
+    """Valide un numéro de téléphone français. Retourne le numéro nettoyé ou ''."""
+    digits = re.sub(r"\D", "", raw)
+    if digits and re.match(r"^0[1-9]\d{8}$", digits):
+        return digits
+    return ""
+
+
 def find_chromium() -> str | None:
-    """Cherche un binaire Chromium installé par Playwright."""
-    # Headless shell (newer installs)
-    hs_paths = sorted(_glob.glob(
-        "/root/.cache/ms-playwright/chromium_headless_shell-*/chrome-headless-shell-linux64/chrome-headless-shell"
-    ))
-    if hs_paths:
-        return hs_paths[-1]
-    # Full Chrome (older installs)
+    """Cherche le vrai Chromium (pas headless shell) installé par Playwright."""
+    # Préférer le vrai Chrome (pas le headless shell) — requis pour le bypass CF
     chrome_paths = sorted(_glob.glob(
         "/root/.cache/ms-playwright/chromium-*/chrome-linux/chrome"
     ))
     if chrome_paths:
         return chrome_paths[-1]
+    # Fallback headless shell (moins fiable pour CF)
+    hs_paths = sorted(_glob.glob(
+        "/root/.cache/ms-playwright/chromium_headless_shell-*/chrome-headless-shell-linux64/chrome-headless-shell"
+    ))
+    if hs_paths:
+        print("  ⚠️  Seul le headless shell est dispo — le bypass CF peut échouer")
+        return hs_paths[-1]
     return None
 
 
@@ -106,57 +120,71 @@ def build_search_url(activite: str, ville: str, page: int) -> str:
     )
 
 
+# ── Attente adaptative Cloudflare ────────────────────────────────────────────
+
+def wait_for_pj_content(page, timeout_s: int = CF_TIMEOUT) -> bool:
+    """
+    Attend que le challenge Cloudflare se résolve.
+    Vérifie toutes les 5s si le titre ne contient plus "un instant" / "cloudflare".
+    Retourne True si le contenu est chargé, False si timeout.
+    """
+    deadline = time.time() + timeout_s
+    while time.time() < deadline:
+        title = (page.title() or "").lower()
+        if "un instant" not in title and "cloudflare" not in title:
+            return True
+        time.sleep(CF_POLL_INTERVAL)
+    return False
+
+
 # ── Parsing d'un bloc entreprise ─────────────────────────────────────────────
 
 def parse_bloc(bloc) -> dict | None:
-    """Extrait les données d'un bloc entreprise PJ."""
+    """
+    Extrait les données d'un bloc entreprise PJ.
+    Sélecteurs CSS issus de README_scraper_pj.md (structure DOM PJ vérifiée).
+    """
     today = date.today().isoformat()
 
-    # Nom
-    name_el = bloc.query_selector(
-        "a.bi-denomination, span.bi-denomination, "
-        "[class*='denomination'], h3 a, h2 a"
-    )
+    # Nom : li [class*='bi-denomination'] h3
+    name_el = bloc.query_selector("[class*='bi-denomination'] h3")
     nom = name_el.inner_text().strip() if name_el else ""
     if not nom:
         return None
 
     # URL fiche
     fiche_url = ""
-    link_el = bloc.query_selector("a.bi-denomination, a[href*='/pros/']")
-    if link_el:
+    link_el = bloc.query_selector("[class*='bi-denomination']")
+    if link_el and link_el.evaluate("el => el.tagName") == "A":
         href = link_el.get_attribute("href") or ""
         if href.startswith("/"):
             fiche_url = PJ_BASE_URL + href
         elif href.startswith("http"):
             fiche_url = href
+    # Fallback: chercher un lien vers /pros/
+    if not fiche_url:
+        link_el2 = bloc.query_selector("a[href*='/pros/']")
+        if link_el2:
+            href = link_el2.get_attribute("href") or ""
+            if href.startswith("/"):
+                fiche_url = PJ_BASE_URL + href
+            elif href.startswith("http"):
+                fiche_url = href
 
-    # Adresse
-    addr_el = bloc.query_selector(
-        "[class*='adresse'], address, [class*='address'], .bi-adresse"
-    )
+    # Adresse : li .bi-address
+    addr_el = bloc.query_selector(".bi-address")
     adresse = addr_el.inner_text().strip() if addr_el else ""
     cp, ville = extract_cp_ville(adresse)
 
-    # Téléphone
+    # Téléphone : li .bi-fantomas .number-contact
+    # Note : .bi-fantomas est un div FRÈRE de .bi-content, pas imbriqué dedans
     tel = ""
-    tel_el = bloc.query_selector(
-        "[class*='tel'], [class*='phone'], a[href^='tel:']"
-    )
+    tel_el = bloc.query_selector(".bi-fantomas .number-contact")
     if tel_el:
-        href = tel_el.get_attribute("href") or ""
-        if href.startswith("tel:"):
-            tel = href.replace("tel:", "").strip()
-        else:
-            tel = tel_el.inner_text().strip()
-    # Fallback: numéro affiché (fantomas pattern from Rogue-two)
-    if not tel:
-        tel_el2 = bloc.query_selector("[id*='fantomas'], .number-contact")
-        if tel_el2:
-            tel = tel_el2.inner_text().strip()
-
-    # Nettoyage téléphone
-    tel = re.sub(r"[^\d+\s]", "", tel).strip()
+        raw_tel = tel_el.inner_text().strip()
+        # Nettoyer le préfixe "Tél : "
+        raw_tel = re.sub(r"^T[ée]l\s*:\s*", "", raw_tel)
+        tel = validate_phone(raw_tel)
 
     # Site web
     site = ""
@@ -204,10 +232,10 @@ def save_intermediate_csv(fiches: list[dict], filepath: str):
 def scrape_pages_jaunes(activite: str, ville: str, nb_max: int,
                         output_dir: str) -> tuple[list[dict], dict]:
     """
-    Scrape Pages Jaunes via Playwright.
+    Scrape Pages Jaunes via Playwright avec bypass Cloudflare.
     Retourne (fiches, stats).
     """
-    from playwright.sync_api import sync_playwright, TimeoutError as PWTimeout
+    from playwright.sync_api import sync_playwright
 
     stats = {
         "pages_parcourues": 0,
@@ -259,70 +287,70 @@ def scrape_pages_jaunes(activite: str, ville: str, nb_max: int,
             user_agent=ua,
             locale="fr-FR",
         )
-        page = context.new_page()
-        page.set_default_timeout(20_000)
-
-        # Anti-detection
-        page.add_init_script(
+        # Anti-detection appliqué au context (hérité par toutes les pages)
+        context.add_init_script(
             "Object.defineProperty(navigator, 'webdriver', {get: () => undefined})"
         )
+        page = context.new_page()
+        page.set_default_timeout(30_000)
 
-        # Warmup homepage (CF cookies)
-        print("  📡 Warmup sur pagesjaunes.fr…", end=" ", flush=True)
+        # ── Warmup CF : navigation bidon pour établir le cookie CF ────────
+        print("  📡 Warmup CF (fleuriste Paris 20)…", end=" ", flush=True)
         try:
-            page.goto(PJ_BASE_URL, wait_until="domcontentloaded", timeout=30_000)
-            random_delay(2, 4)
-            print("✅")
+            warmup_url = (
+                f"{PJ_BASE_URL}/annuaire/chercherlespros"
+                "?quoiqui=fleuriste&ou=Paris+20"
+            )
+            page.goto(warmup_url, wait_until="domcontentloaded", timeout=30_000)
+            if wait_for_pj_content(page, timeout_s=CF_TIMEOUT):
+                print("✅ Cookie CF établi")
+            else:
+                print("⚠️  Timeout CF — le scraping risque d'échouer")
+                stats["blocages_cf"] += 1
         except Exception as e:
             print(f"⚠️  {e}")
-            # Continue anyway — CF cookies might not be needed
 
-        # Pagination loop
+        # ── Boucle de pagination ──────────────────────────────────────────
         page_num = 1
         while len(fiches) < nb_max:
             url = build_search_url(activite, ville, page_num)
             print(f"  📡 Page {page_num}…", end=" ", flush=True)
 
             try:
-                # Rotate UA every few pages
-                if page_num > 1 and page_num % 3 == 0:
-                    context.close()
-                    ua = random.choice(USER_AGENTS)
-                    context = browser.new_context(user_agent=ua, locale="fr-FR")
-                    page = context.new_page()
-                    page.set_default_timeout(20_000)
-                    page.add_init_script(
-                        "Object.defineProperty(navigator, 'webdriver', "
-                        "{get: () => undefined})"
-                    )
+                # Délai entre pages (5s même mot-clé)
+                if page_num > 1:
+                    time.sleep(DELAY_SAME_KEYWORD)
 
-                random_delay(1, 3)
-                page.goto(url, wait_until="domcontentloaded", timeout=20_000)
+                page.goto(url, wait_until="domcontentloaded", timeout=30_000)
 
-                # Wait for company blocks
-                try:
-                    page.wait_for_selector(
-                        "article.bi-bloc, div[class*='bi-bloc'], "
-                        "li[class*='bi-bloc'], [data-bi-name]",
-                        timeout=8_000,
-                    )
-                except PWTimeout:
-                    pass  # May be empty page or CF block
+                # Attente adaptative : vérifier le titre toutes les 5s
+                if not wait_for_pj_content(page, timeout_s=CF_TIMEOUT):
+                    print(f"⚠️  Timeout CF ({CF_TIMEOUT}s)")
+                    consecutive_empty += 1
+                    stats["blocages_cf"] += 1
+                    if consecutive_empty >= MAX_EMPTY_PAGES:
+                        print(f"  🛑 {MAX_EMPTY_PAGES} pages bloquées consécutives — arrêt")
+                        break
+                    page_num += 1
+                    continue
 
             except Exception as e:
                 print(f"❌ {e}")
                 consecutive_empty += 1
                 if consecutive_empty >= MAX_EMPTY_PAGES:
-                    print(f"  🛑 {MAX_EMPTY_PAGES} pages vides consécutives — arrêt (blocage CF probable)")
+                    print(f"  🛑 {MAX_EMPTY_PAGES} pages échouées consécutives — arrêt")
                     stats["blocages_cf"] = consecutive_empty
                     break
                 page_num += 1
                 continue
 
-            # Extract company blocks
-            blocs = page.query_selector_all(
-                "article.bi-bloc, div[class*='bi-bloc'], li[class*='bi-bloc']"
-            )
+            # Extraire les blocs entreprise (<li> contenant .bi-content)
+            blocs = page.query_selector_all("li:has(.bi-content)")
+            if not blocs:
+                # Fallbacks
+                blocs = page.query_selector_all(
+                    "article.bi-bloc, div[class*='bi-bloc'], li[class*='bi-bloc']"
+                )
             if not blocs:
                 blocs = page.query_selector_all("[data-bi-name]")
 
@@ -348,7 +376,7 @@ def scrape_pages_jaunes(activite: str, ville: str, nb_max: int,
 
                 stats["fiches_brutes"] += 1
 
-                # Déduplication
+                # Déduplication sur (nom, code postal)
                 key = (
                     fiche["Nom de l'entreprise"].lower(),
                     fiche["Code Postal"],
@@ -364,15 +392,13 @@ def scrape_pages_jaunes(activite: str, ville: str, nb_max: int,
             stats["pages_parcourues"] = page_num
             print(f"✅ {page_count} fiches ({len(fiches)} total)")
 
-            # Sauvegarde intermédiaire
+            # Sauvegarde intermédiaire toutes les SAVE_EVERY fiches
             if len(fiches) % SAVE_EVERY < page_count:
                 save_intermediate_csv(fiches, backup_path)
                 print(f"  💾 Sauvegarde intermédiaire ({len(fiches)} fiches)")
 
-            # Check for next page
-            has_next = page.query_selector(
-                "a[rel='next'], a.pagination-next, li.next a"
-            )
+            # Pagination : a#pagination-next
+            has_next = page.query_selector("a#pagination-next")
             if not has_next:
                 print("  ℹ️  Dernière page atteinte")
                 break

@@ -63,3 +63,29 @@
 ### Résultats du test (Paris, "boulangerie", max 50)
 - 0 fiches collectées (blocage proxy/CF attendu en sandbox)
 - Le script s'arrête proprement après 3 tentatives échouées
+
+---
+
+## 2026-04-03 — script_pages_jaunes.py v2 (alignement README_scraper_pj.md)
+
+### Ce qui a été modifié
+Réécriture du script selon la doc technique `README_scraper_pj.md` (scraper production, 3 329 fiches) :
+
+1. **Warmup CF** : navigation préalable sur une URL PJ bidon (`fleuriste Paris 20`) + attente adaptative (boucle 5s, timeout 90s) jusqu'à ce que le titre ne contienne plus "un instant". Remplace le simple `goto` homepage.
+2. **Attente adaptative** : `wait_for_pj_content()` après chaque `page.goto` — vérifie le titre toutes les 5s au lieu d'un `sleep` fixe. Le challenge CF se résout en 8-15s sur IP propre, jusqu'à 30-60s sinon.
+3. **Délais entre pages** : 5s entre pages du même mot-clé, 8s entre mots-clés différents (avant : 1-3s aléatoire, trop rapide → rate-limit CF).
+4. **Sélecteurs CSS corrigés** (DOM PJ vérifié) :
+   - Nom : `[class*='bi-denomination'] h3` (avant : sélecteurs multiples génériques)
+   - Adresse : `.bi-address` (avant : `[class*='adresse']`)
+   - Téléphone : `.bi-fantomas .number-contact` — div **frère** de `.bi-content` (avant : `[class*='tel']`)
+   - Pagination : `a#pagination-next` (avant : `a[rel='next']`)
+5. **Validation téléphone** : regex `^0[1-9]\d{8}$` sur chiffres uniquement — écarte les numéros invalides.
+6. **Browser** : préfère le vrai Chromium (`chrome-linux/chrome`) au headless shell — requis pour le bypass CF.
+7. **`add_init_script` sur le context** (pas la page) pour que le webdriver override s'applique à toutes les pages y compris après rotation UA.
+
+### Problèmes rencontrés
+- Aucun nouveau — les mêmes contraintes sandbox (proxy, Chromium) s'appliquent
+
+### État final
+**Code aligné sur le scraper production, non testable en sandbox** ⚠️
+- À tester en local : `python script_pages_jaunes.py --ville Paris --activite "boulangerie" --nb-max 50`
