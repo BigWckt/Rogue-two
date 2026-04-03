@@ -7,3 +7,7 @@ lba_lbb_results_*.csv
 pj_results_*.xlsx
 pj_results_*.csv
 *_backup.csv
+*_checkpoint.csv
+*_enrichi.xlsx
+*_enrichi.csv
+test_pj_*.xlsx

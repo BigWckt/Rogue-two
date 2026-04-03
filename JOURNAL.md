@@ -89,3 +89,40 @@ Réécriture du script selon la doc technique `README_scraper_pj.md` (scraper pr
 ### État final
 **Code aligné sur le scraper production, non testable en sandbox** ⚠️
 - À tester en local : `python script_pages_jaunes.py --ville Paris --activite "boulangerie" --nb-max 50`
+
+---
+
+## 2026-04-03 — script_enrichissement.py
+
+### Ce qui a été fait
+- Création du script `script_enrichissement.py` : enrichissement SIRET via API recherche-entreprises.api.gouv.fr
+- Fonctionnalités implémentées :
+  - CLI avec `--input`, `--output`, `--resume` (reprise checkpoint)
+  - Recherche SIRET par nom + code postal, fallback par commune, puis nom seul
+  - Matching par similarité de chaîne (rapidfuzz, `fuzz.ratio`)
+  - Seuil : 80% de similarité minimum pour valider un SIRET
+  - Nettoyage des noms (suppression formes juridiques SARL/SAS/etc.)
+  - Colonnes ajoutées : `SIRET`, `Code NAF`, `Statut enrichissement`, `Score similarité`
+  - Export Excel avec onglet principal (SIRET trouvés) + onglet "Exclus" (audit)
+  - Checkpoint CSV toutes les 25 entreprises pour reprise
+  - Retry 3x avec backoff exponentiel sur 429/5xx
+  - Synthèse console avec compteurs
+
+### Problèmes rencontrés
+1. **Rate limiting API** : l'API recherche-entreprises retourne 429 fréquemment en sandbox (plusieurs tentatives par entreprise avec fallbacks commune/nom seul). Délai porté à 1.5s entre appels.
+2. **HTTP 400 sur certaines requêtes** : probablement lié aux retries après 429 — corrigé en traitant 400 comme non-retryable.
+3. **Noms composés difficiles** : "Boulangerie Maison Landemaine" retourne 0 résultats avec code postal — l'API SIRENE ne référence pas toujours l'enseigne commerciale.
+
+### État final
+**Fonctionne** ✅
+
+### Résultats du test (10 boulangeries Paris)
+- SIRET trouvés : 5/10 (50%)
+  - Du Pain et des Idées → 44066171800021 (95%)
+  - Poilâne → 32444503000012 (86%)
+  - Boulangerie Bo → 80029869700015 (100%)
+  - Maison Kayser → 85152737400025 (100%)
+  - Mamiche → 82925376400015 (100%)
+- Exclus : 1 (similarité 77% < 80%)
+- Erreurs API (429 rate limit) : 4
+- Taux attendu en conditions normales (sans rate-limit) : ~60-70%
