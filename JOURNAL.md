@@ -126,3 +126,36 @@ Réécriture du script selon la doc technique `README_scraper_pj.md` (scraper pr
 - Exclus : 1 (similarité 77% < 80%)
 - Erreurs API (429 rate limit) : 4
 - Taux attendu en conditions normales (sans rate-limit) : ~60-70%
+
+---
+
+## 2026-04-07 — script_comparaison.py
+
+### Ce qui a été fait
+- Création du script `script_comparaison.py` : croisement PJ enrichi × LBA/LBB par SIRET
+- Fonctionnalités implémentées :
+  - CLI avec `--pj`, `--lba`, `--output`
+  - Chargement des deux fichiers Excel, normalisation SIRET
+  - Scoring par priorité : Haute (LBA), Moyenne (LBB), Basse (PJ seul)
+  - Fusion des données : nom/adresse/tél de PJ + score/offres de LBA/LBB
+  - Export Excel 4 onglets : Priorité Haute, Moyenne, Basse, Tous les leads
+  - Mise en forme charte Skill & You (en-têtes #1558EE, SIRET texte, freeze panes)
+  - Fonctionne avec un seul fichier (--lba seul ou --pj seul)
+  - Colonnes HubSpot-ready (13 colonnes nommées exactement)
+  - Synthèse console avec compteurs par priorité
+
+### Problèmes rencontrés
+- Aucun — l'API n'est pas sollicitée, le script fonctionne entièrement en local
+
+### État final
+**Fonctionne** ✅
+
+### Résultats du test
+**Test 1 — PJ enrichi (5 entreprises) + LBA/LBB (162 entreprises) :**
+- Correspondances PJ ↔ LBA/LBB : 0 (SIRETs différents entre les jeux de test)
+- Priorité Haute : 12 | Moyenne : 150 | Basse : 5
+- Total : 167 leads qualifiés
+
+**Test 2 — LBA/LBB seul (162 entreprises, sans PJ) :**
+- Priorité Haute : 12 | Moyenne : 150 | Basse : 0
+- Total : 162 leads qualifiés
