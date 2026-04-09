@@ -63,13 +63,19 @@ def normalize_siret(raw) -> str:
         return str(raw).strip()
 
 
+USER_AGENT = "SkillAndYou-Prospection/1.0 (enrichissement SIRET)"
+
+
 def http_get(url, params=None):
-    """GET avec retry + backoff exponentiel."""
+    """GET avec retry + backoff exponentiel + respect Retry-After."""
+    headers = {"User-Agent": USER_AGENT}
     for attempt in range(1, MAX_RETRIES + 1):
         try:
-            resp = requests.get(url, params=params, timeout=API_TIMEOUT)
+            resp = requests.get(
+                url, params=params, headers=headers, timeout=API_TIMEOUT,
+            )
             if resp.status_code == 429:
-                wait = 2 ** attempt
+                wait = int(resp.headers.get("Retry-After", 2 ** attempt))
                 print(f"  ⚠️  HTTP 429 — retry {attempt}/{MAX_RETRIES} dans {wait}s")
                 time.sleep(wait)
                 continue
@@ -110,88 +116,117 @@ def clean_name(name: str) -> str:
 
 # ── Recherche SIRET ──────────────────────────────────────────────────────────
 
+def _best_match(candidates: list[dict], nom_original: str) -> dict | None:
+    """Trouve le meilleur match par similarité de nom parmi les candidats API."""
+    nom_clean = clean_name(nom_original)
+    best_score = 0
+    best_result = None
+
+    for r in candidates:
+        api_names = []
+        for field in ["nom_complet", "nom_raison_sociale"]:
+            v = r.get(field) or ""
+            if v:
+                api_names.append(v)
+        siege = r.get("siege") or {}
+        enseignes = siege.get("liste_enseignes") or []
+        if enseignes:
+            api_names.append(enseignes[0])
+
+        for api_name in api_names:
+            score = fuzz.ratio(nom_clean, clean_name(api_name))
+            if score > best_score:
+                best_score = score
+                best_result = r
+
+    if best_result is None:
+        return None
+
+    score_rounded = round(best_score)
+    if best_score >= SIMILARITY_THRESHOLD:
+        siege = best_result.get("siege") or {}
+        return {
+            "siret": normalize_siret(siege.get("siret") or ""),
+            "naf": siege.get("activite_principale") or "",
+            "score": score_rounded,
+            "status": "SIRET trouvé",
+        }
+    return {
+        "siret": "",
+        "naf": "",
+        "score": score_rounded,
+        "status": f"Exclu — similarité {score_rounded}% < {SIMILARITY_THRESHOLD}%",
+    }
+
+
+def _filter_by_cp(results: list[dict], code_postal: str) -> list[dict]:
+    """Filtre les résultats dont le code postal du siège correspond."""
+    if not code_postal:
+        return []
+    return [
+        r for r in results
+        if (r.get("siege") or {}).get("code_postal", "") == code_postal
+    ]
+
+
+def _filter_by_commune(results: list[dict], ville: str) -> list[dict]:
+    """Filtre les résultats dont la commune du siège correspond (insensible casse)."""
+    if not ville:
+        return []
+    ville_lower = ville.lower().strip()
+    return [
+        r for r in results
+        if ville_lower in ((r.get("siege") or {}).get("libelle_commune") or "").lower()
+    ]
+
+
 def search_siret(nom: str, code_postal: str, ville: str) -> dict:
     """
-    Recherche le SIRET via l'API recherche-entreprises.
-    Retourne {"siret": ..., "naf": ..., "score": ..., "status": ...}
+    1 seul appel API (q=NOM, per_page=10, minimal=true), puis filtrage local :
+      - Étape 1 : filtrer par code_postal exact
+      - Étape 2 (si vide) : filtrer par commune
+      - Étape 3 (si vide) : garder tous les résultats
+    Fallback : si 0 résultat, 2ᵉ appel avec nom nettoyé. Max 2 appels.
     """
     nom_clean = clean_name(nom)
     if not nom_clean:
         return {"siret": "", "naf": "", "score": 0, "status": "Exclu — nom vide"}
 
-    # Tentative 1 : nom + code postal
-    result = _try_search(nom, nom_clean, {"q": nom, "code_postal": code_postal, "per_page": "5"})
-    if result:
-        return result
-
-    # Tentative 2 : nom + commune (ville)
-    if ville:
-        result = _try_search(nom, nom_clean, {"q": nom, "commune": ville, "per_page": "5"})
-        if result:
-            return result
-
-    # Tentative 3 : nom seul (dernier recours)
-    result = _try_search(nom, nom_clean, {"q": nom, "per_page": "5"})
-    if result:
-        return result
-
-    return {"siret": "", "naf": "", "score": 0, "status": "Exclu — SIRET introuvable"}
-
-
-def _try_search(nom_original: str, nom_clean: str, params: dict) -> dict | None:
-    """Tente une recherche et retourne le meilleur match ou None."""
-    data = http_get(API_URL, params=params)
+    # ── Appel 1 : nom brut ────────────────────────────────────────────────
+    data = http_get(API_URL, params={
+        "q": nom, "per_page": "10", "minimal": "false",
+    })
     if data is None:
         return {"siret": "", "naf": "", "score": 0, "status": "Exclu — erreur API"}
 
     results = data.get("results") or []
+
+    # ── Appel 2 (fallback) : nom nettoyé si 0 résultat ───────────────────
+    if not results and nom != nom_clean:
+        time.sleep(API_DELAY)
+        data = http_get(API_URL, params={
+            "q": nom_clean, "per_page": "10", "minimal": "false",
+        })
+        if data is None:
+            return {"siret": "", "naf": "", "score": 0, "status": "Exclu — erreur API"}
+        results = data.get("results") or []
+
     if not results:
-        return None
+        return {"siret": "", "naf": "", "score": 0, "status": "Exclu — SIRET introuvable"}
 
-    # Trouver le meilleur match par similarité de nom
-    best_score = 0
-    best_result = None
+    # ── Filtrage local en cascade ─────────────────────────────────────────
+    subset = _filter_by_cp(results, code_postal)
+    if not subset:
+        subset = _filter_by_commune(results, ville)
+    if not subset:
+        subset = results
 
-    for r in results:
-        # Nom de l'entreprise dans l'API
-        api_names = []
-        nom_complet = r.get("nom_complet") or ""
-        nom_raison = r.get("nom_raison_sociale") or ""
-        siege = r.get("siege") or {}
-        enseigne = (siege.get("liste_enseignes") or [""])[0] if siege.get("liste_enseignes") else ""
+    # ── Meilleur match par similarité ─────────────────────────────────────
+    match = _best_match(subset, nom)
+    if match:
+        return match
 
-        for candidate in [nom_complet, nom_raison, enseigne]:
-            if candidate:
-                api_names.append(candidate)
-
-        for api_name in api_names:
-            score = fuzz.ratio(clean_name(nom_original), clean_name(api_name))
-            if score > best_score:
-                best_score = score
-                best_result = r
-
-    score_rounded = round(best_score)
-
-    if best_score >= SIMILARITY_THRESHOLD and best_result:
-        siege = best_result.get("siege") or {}
-        siret = normalize_siret(siege.get("siret") or "")
-        naf = siege.get("activite_principale") or ""
-        return {
-            "siret": siret,
-            "naf": naf,
-            "score": score_rounded,
-            "status": "SIRET trouvé",
-        }
-
-    if best_score > 0:
-        return {
-            "siret": "",
-            "naf": "",
-            "score": score_rounded,
-            "status": f"Exclu — similarité {score_rounded}% < {SIMILARITY_THRESHOLD}%",
-        }
-
-    return None
+    return {"siret": "", "naf": "", "score": 0, "status": "Exclu — SIRET introuvable"}
 
 
 # ── Checkpoint / Resume ──────────────────────────────────────────────────────

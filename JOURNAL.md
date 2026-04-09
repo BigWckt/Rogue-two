@@ -209,15 +209,23 @@ Réécriture du script selon la doc technique `README_scraper_pj.md` (scraper pr
 - Lancé avec `--proxy "$HTTPS_PROXY"` + `--ignore-certificate-errors` + `--no-proxy-server` désactivé quand proxy explicite
 - Fichier : `Batch_2_0426/pj_results_multi_20260409.xlsx` (3 onglets)
 
-#### Étape 3 — Enrichissement SIRET ✅
-- 168 entreprises traitées → **75 SIRET trouvés (45%)**
-- 93 exclus (similarité < 80% ou SIRET introuvable)
-- 58 erreurs API (rate-limiting 429 intensif)
-- Taux attendu sans rate-limit : ~60-70%
+#### Étape 3 — Enrichissement SIRET ✅ (optimisé v2)
+Stratégie v2 : **1 seul appel API** (`q=NOM, per_page=10`) + filtrage local en cascade (code_postal → commune → tous), au lieu de 3 appels en cascade côté API.
+
+| Métrique | v1 (cascade 3 appels) | v2 (1 appel + filtrage local) |
+|---|---|---|
+| SIRET trouvés | 75 (45%) | **101 (60%)** |
+| Erreurs API (429) | 58 | **28** |
+| Appels API / entreprise | ~2.5 | **~1.1** |
+
+- 168 entreprises traitées → **101 SIRET trouvés (60%)**
+- 67 exclus (similarité < 80% ou SIRET introuvable)
+- 28 erreurs API (rate-limiting 429, -52% vs v1)
+- Support header `Retry-After` + User-Agent explicite
 - Fichier : `Batch_2_0426/pj_results_multi_20260409_enrichi.xlsx` (2 onglets)
 
 #### Étape 4 — Croisement final ✅
-- PJ enrichi : 73 entreprises avec SIRET
+- PJ enrichi : 98 entreprises avec SIRET
 - LBA/LBB : 38 entreprises avec SIRET
 - **Correspondances PJ ↔ LBA/LBB (même SIRET) : 2**
 
@@ -225,13 +233,13 @@ Réécriture du script selon la doc technique `README_scraper_pj.md` (scraper pr
 |---|---|
 | Haute (LBA) | 0 |
 | Moyenne (LBB) | 38 |
-| Basse (PJ seul) | 71 |
-| **Total** | **109** |
+| Basse (PJ seul) | 96 |
+| **Total** | **134** |
 
 - Fichier : `Batch_2_0426/leads_qualifies_multi_20260409.xlsx` (4 onglets)
 
 ### Fichiers générés (Batch_2_0426/)
 - `lba_lbb_results_multi_20260409.xlsx` (11 Ko) — 38 agences LBB
 - `pj_results_multi_20260409.xlsx` (29 Ko) — 168 fiches PJ
-- `pj_results_multi_20260409_enrichi.xlsx` (20 Ko) — 75 avec SIRET
-- `leads_qualifies_multi_20260409.xlsx` (24 Ko) — 109 leads qualifiés
+- `pj_results_multi_20260409_enrichi.xlsx` (20 Ko) — 101 avec SIRET
+- `leads_qualifies_multi_20260409.xlsx` (24 Ko) — 134 leads qualifiés
