@@ -296,9 +296,13 @@ def main():
     checkpoint_path = os.path.join(output_dir, f"{base}_checkpoint.csv")
     csv_backup_path = os.path.join(output_dir, f"{base}_enrichi.csv")
 
-    # Charger le fichier source
+    # Charger le fichier source (onglet Consolidé si multi-villes, sinon sheet 0)
     print(f"📂 Chargement de {input_file}…")
-    df = pd.read_excel(input_file, dtype=str)
+    try:
+        df = pd.read_excel(input_file, sheet_name="Consolidé", dtype=str)
+        print("  (onglet Consolidé détecté)")
+    except (ValueError, KeyError):
+        df = pd.read_excel(input_file, dtype=str)
     df = df.fillna("")
     fiches = df.to_dict("records")
     print(f"  {len(fiches)} entreprises chargées")

@@ -61,7 +61,10 @@ def normalize_siret(raw) -> str:
 
 def load_lba_lbb(filepath: str) -> dict[str, dict]:
     """Charge le fichier LBA/LBB et retourne un dict SIRET → row."""
-    df = pd.read_excel(filepath, dtype=str).fillna("")
+    try:
+        df = pd.read_excel(filepath, sheet_name="Consolidé", dtype=str).fillna("")
+    except (ValueError, KeyError):
+        df = pd.read_excel(filepath, dtype=str).fillna("")
     by_siret: dict[str, dict] = {}
     for _, row in df.iterrows():
         siret = normalize_siret(row.get("SIRET", ""))
@@ -81,7 +84,10 @@ def load_lba_lbb(filepath: str) -> dict[str, dict]:
 
 def load_pj_enrichi(filepath: str) -> dict[str, dict]:
     """Charge le fichier PJ enrichi (onglet Entreprises) et retourne un dict SIRET → row."""
-    df = pd.read_excel(filepath, sheet_name=0, dtype=str).fillna("")
+    try:
+        df = pd.read_excel(filepath, sheet_name="Entreprises", dtype=str).fillna("")
+    except (ValueError, KeyError):
+        df = pd.read_excel(filepath, sheet_name=0, dtype=str).fillna("")
     by_siret: dict[str, dict] = {}
     for _, row in df.iterrows():
         siret = normalize_siret(row.get("SIRET", ""))

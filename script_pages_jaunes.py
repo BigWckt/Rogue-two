@@ -49,6 +49,7 @@ EXCEL_COLUMNS = [
     "Adresse",
     "Ville",
     "Code Postal",
+    "Ville de recherche",
     "Téléphone",
     "Site web",
     "Catégorie",
@@ -464,17 +465,24 @@ def parse_args():
     return parser.parse_args()
 
 
-def load_config(args) -> tuple[str, str, int, str]:
-    """Retourne (ville, activite, nb_max, output_dir)."""
+def load_config(args) -> tuple[list[str], str, int, str]:
+    """Retourne (villes, activite, nb_max, output_dir)."""
     if args.config:
         with open(args.config, encoding="utf-8") as f:
             cfg = json.load(f)
-        ville = cfg["ville"]
+        # Support "ville" (string) ou "villes" (array)
+        if "villes" in cfg:
+            villes = cfg["villes"]
+        elif "ville" in cfg:
+            villes = [cfg["ville"]]
+        else:
+            print("❌ Clé 'ville' ou 'villes' manquante dans le JSON")
+            sys.exit(1)
         activite = cfg["type_commerce"]
         nb_max = cfg.get("nb_max_resultats", 100)
         output_dir = cfg.get("output", ".")
     elif args.ville and args.activite:
-        ville = args.ville
+        villes = [args.ville]
         activite = args.activite
         nb_max = args.nb_max
         output_dir = args.output
@@ -483,47 +491,121 @@ def load_config(args) -> tuple[str, str, int, str]:
         sys.exit(1)
 
     os.makedirs(output_dir, exist_ok=True)
-    return ville, activite, nb_max, output_dir
+    return villes, activite, nb_max, output_dir
 
 
 # ── Main ──────────────────────────────────────────────────────────────────────
 
 def main():
     args = parse_args()
-    ville, activite, nb_max, output_dir = load_config(args)
+    villes, activite, nb_max, output_dir = load_config(args)
+    multi = len(villes) > 1
 
     print("══════════════════════════════════════════════════")
     print("  SCRAPING PAGES JAUNES")
-    print(f"  Ville    : {ville}")
+    print(f"  Villes   : {', '.join(villes)}")
     print(f"  Activité : {activite}")
-    print(f"  Max      : {nb_max} fiches")
+    print(f"  Max      : {nb_max} fiches par ville")
     print("══════════════════════════════════════════════════")
 
-    # Scraping
-    fiches, stats = scrape_pages_jaunes(activite, ville, nb_max, output_dir)
+    all_city_results: dict[str, list[dict]] = {}
+    all_city_stats: dict[str, dict] = {}
+    today_str = date.today().strftime("%Y%m%d")
 
-    if not fiches:
-        print("\n⚠️  Aucune fiche collectée.")
-        print("   Causes possibles : blocage Cloudflare, proxy, ou aucun résultat PJ.")
+    for ville in villes:
+        print(f"\n{'═' * 50}")
+        print(f"  📍 {ville}")
+        print(f"{'═' * 50}")
+
+        try:
+            fiches, stats = scrape_pages_jaunes(activite, ville, nb_max, output_dir)
+
+            # Ajouter "Ville de recherche"
+            for f in fiches:
+                f["Ville de recherche"] = ville
+
+            all_city_results[ville] = fiches
+            all_city_stats[ville] = stats
+            print(f"  ✅ {len(fiches)} fiches pour {ville}")
+
+            # Cleanup backup per-city
+            ville_slug = ville.lower().replace(" ", "_").replace("-", "_")
+            backup_path = os.path.join(
+                output_dir, f"pj_results_{ville_slug}_{today_str}_backup.csv",
+            )
+            if os.path.exists(backup_path):
+                os.remove(backup_path)
+
+        except Exception as e:
+            print(f"  ❌ Erreur pour {ville} : {e}")
+            all_city_results[ville] = []
+            all_city_stats[ville] = {
+                "pages_parcourues": 0, "fiches_brutes": 0,
+                "doublons": 0, "blocages_cf": 0,
+            }
+            continue
+
+    if not any(all_city_results.values()):
+        print("\n⚠️  Aucune fiche collectée pour aucune ville.")
         sys.exit(0)
 
-    # Export
-    print("\n── Export ──────────────────────────────────────")
-    xlsx_path, csv_path = export_results(fiches, output_dir, ville)
-    print(f"  ✅ {xlsx_path}")
-    print(f"  ✅ {csv_path}")
+    if multi:
+        xlsx_path = os.path.join(output_dir, f"pj_results_multi_{today_str}.xlsx")
+        csv_path = xlsx_path.replace(".xlsx", ".csv")
 
-    # Cleanup backup
-    today_str = date.today().strftime("%Y%m%d")
-    ville_slug = ville.lower().replace(" ", "_").replace("-", "_")
-    backup_path = os.path.join(
-        output_dir, f"pj_results_{ville_slug}_{today_str}_backup.csv"
-    )
-    if os.path.exists(backup_path):
-        os.remove(backup_path)
+        # Consolidé : dédup globale sur (nom, code postal)
+        all_fiches: list[dict] = []
+        for fiches in all_city_results.values():
+            all_fiches.extend(fiches)
+        seen_keys: set[tuple[str, str]] = set()
+        consolidated: list[dict] = []
+        for f in all_fiches:
+            key = (f.get("Nom de l'entreprise", "").lower(), f.get("Code Postal", ""))
+            if key in seen_keys:
+                continue
+            seen_keys.add(key)
+            consolidated.append(f)
 
-    # Synthèse
-    print_synthese(ville, activite, fiches, stats, xlsx_path, csv_path)
+        columns = EXCEL_COLUMNS
+        with pd.ExcelWriter(xlsx_path, engine="openpyxl") as writer:
+            for ville, fiches in all_city_results.items():
+                if fiches:
+                    df = pd.DataFrame(fiches, columns=columns)
+                    df.to_excel(writer, sheet_name=ville[:31], index=False)
+            df_all = pd.DataFrame(consolidated, columns=columns)
+            df_all.to_excel(writer, sheet_name="Consolidé", index=False)
+
+        df_all.to_csv(csv_path, index=False, encoding="utf-8-sig")
+
+        print(f"\n── Export multi-villes ──────────────────────────")
+        print(f"  ✅ {xlsx_path}")
+        print(f"  ✅ {csv_path}")
+        print()
+        print("══════════════════════════════════════════════════")
+        print("  RÉSULTATS MULTI-VILLES — Pages Jaunes")
+        print(f"  Recherche : \"{activite}\"")
+        print()
+        for ville, st in all_city_stats.items():
+            n = len(all_city_results.get(ville, []))
+            print(f"  📍 {ville}: {n} fiches "
+                  f"({st.get('pages_parcourues', 0)} pages, "
+                  f"{st.get('blocages_cf', 0)} blocages CF)")
+        print("  ──────────────────────────────────────────────")
+        print(f"  Total consolidé (dédup nom+CP) : {len(consolidated)} fiches")
+        print(f"  📁 Fichier : {os.path.basename(xlsx_path)}")
+        print("══════════════════════════════════════════════════")
+    else:
+        ville = villes[0]
+        fiches = all_city_results.get(ville, [])
+        if not fiches:
+            print("\n⚠️  Aucune fiche collectée.")
+            sys.exit(0)
+        xlsx_path, csv_path = export_results(fiches, output_dir, ville)
+        print(f"\n── Export ──────────────────────────────────────")
+        print(f"  ✅ {xlsx_path}")
+        print(f"  ✅ {csv_path}")
+        print_synthese(ville, activite, fiches, all_city_stats[ville],
+                       xlsx_path, csv_path)
 
 
 if __name__ == "__main__":

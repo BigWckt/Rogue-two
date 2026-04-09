@@ -77,6 +77,9 @@ VILLES_FALLBACK = {
     "aix-en-provence": (43.5297, 5.4474),
     "clermont-ferrand": (45.7772, 3.0870),
     "tours":       (47.3941, 0.6848),
+    "boulogne-billancourt": (48.8397, 2.2399),
+    "paris 20":    (48.8637, 2.3985),
+    "paris 20e":   (48.8637, 2.3985),
 }
 
 # ── API config ────────────────────────────────────────────────────────────────
@@ -99,7 +102,8 @@ REQUEST_TIMEOUT = 30
 
 EXCEL_COLUMNS = [
     "Nom de l'entreprise", "SIRET", "Code NAF", "Adresse", "Ville",
-    "Code Postal", "Source", "Score LBB", "Offres actives", "Date de collecte",
+    "Code Postal", "Ville de recherche", "Source", "Score LBB",
+    "Offres actives", "Date de collecte",
 ]
 
 
@@ -452,17 +456,24 @@ def parse_args():
     return parser.parse_args()
 
 
-def load_config(args) -> tuple[str, list[str], int, str]:
-    """Retourne (ville, naf_codes, rayon, output_dir)."""
+def load_config(args) -> tuple[list[str], list[str], int, str]:
+    """Retourne (villes, naf_codes, rayon, output_dir)."""
     if args.config:
         with open(args.config, encoding="utf-8") as f:
             cfg = json.load(f)
-        ville = cfg["ville"]
+        # Support "ville" (string) ou "villes" (array)
+        if "villes" in cfg:
+            villes = cfg["villes"]
+        elif "ville" in cfg:
+            villes = [cfg["ville"]]
+        else:
+            print("❌ Clé 'ville' ou 'villes' manquante dans le JSON")
+            sys.exit(1)
         naf_codes = cfg["codes_naf"]
         rayon = cfg.get("rayon_km", 30)
         output_dir = cfg.get("output", ".")
     elif args.ville and args.naf:
-        ville = args.ville
+        villes = [args.ville]
         naf_codes = args.naf
         rayon = args.rayon
         output_dir = args.output
@@ -471,18 +482,19 @@ def load_config(args) -> tuple[str, list[str], int, str]:
         sys.exit(1)
 
     os.makedirs(output_dir, exist_ok=True)
-    return ville, naf_codes, rayon, output_dir
+    return villes, naf_codes, rayon, output_dir
 
 
 # ── Main ──────────────────────────────────────────────────────────────────────
 
 def main():
     args = parse_args()
-    ville, naf_codes, rayon, output_dir = load_config(args)
+    villes, naf_codes, rayon, output_dir = load_config(args)
+    multi = len(villes) > 1
 
     print("══════════════════════════════════════════════════")
     print("  PROSPECTION LBA + LBB")
-    print(f"  Ville  : {ville}")
+    print(f"  Villes : {', '.join(villes)}")
     print(f"  NAF    : {', '.join(naf_codes)}")
     print(f"  Rayon  : {rayon} km")
     print("══════════════════════════════════════════════════")
@@ -494,50 +506,135 @@ def main():
         sys.exit(1)
     print(f"\n✅ Codes ROME : {', '.join(rome_codes)}")
 
-    # 2. Géocodage
-    lat, lon = geocode(ville)
-
-    # 3. Appels API /search (LBA jobs + LBB recruiters)
-    print("\n── Collecte via /search ─────────────────────────")
-    lba_rows, all_lbb = fetch_search(rome_codes, lat, lon, rayon)
-
-    # Sauvegarde intermédiaire au cas où
+    # 2. Boucle sur les villes
+    all_city_results: dict[str, list[dict]] = {}
+    city_stats: dict[str, dict] = {}
     today_str = date.today().strftime("%Y%m%d")
-    ville_slug = ville.lower().replace(" ", "_").replace("-", "_")
-    backup_path = os.path.join(output_dir, f"lba_lbb_results_{ville_slug}_{today_str}_backup.csv")
-    save_backup_csv(lba_rows + all_lbb, backup_path)
 
-    # Count unique LBA / LBB avant dédup croisée
-    lba_sirets = {r["SIRET"] for r in lba_rows if r.get("SIRET")}
-    lbb_sirets = {r["SIRET"] for r in all_lbb if r.get("SIRET")}
-    n_lba_unique = len(lba_sirets)
-    n_lbb_unique = len(lbb_sirets - lba_sirets)
+    for ville in villes:
+        print(f"\n{'═' * 50}")
+        print(f"  📍 {ville}")
+        print(f"{'═' * 50}")
 
-    # 5. Déduplication
-    print("\n── Déduplication par SIRET ──────────────────────")
-    rows, n_doublons = deduplicate(lba_rows, all_lbb)
-    print(f"  ✅ {len(rows)} entreprises uniques ({n_doublons} doublons LBA+LBB)")
+        try:
+            lat, lon = geocode(ville)
 
-    if not rows:
-        print("\n⚠️  Aucune entreprise collectée — vérifiez les paramètres ou l'accès API.")
+            effective_radius = rayon
+            print(f"\n── Collecte via /search (rayon {effective_radius} km) ──")
+            lba_rows, lbb_rows = fetch_search(rome_codes, lat, lon, effective_radius)
+
+            # Rayon 0 : si aucun résultat, retry avec 1 km
+            if effective_radius == 0 and not lba_rows and not lbb_rows:
+                print("  ⚠️  Rayon 0 km : aucun résultat — retry avec 1 km")
+                lba_rows, lbb_rows = fetch_search(rome_codes, lat, lon, 1)
+
+            # Ajouter "Ville de recherche"
+            for row in lba_rows + lbb_rows:
+                row["Ville de recherche"] = ville
+
+            # Backup CSV après chaque ville
+            ville_slug = ville.lower().replace(" ", "_").replace("-", "_")
+            backup_path = os.path.join(
+                output_dir, f"lba_lbb_{ville_slug}_{today_str}_backup.csv",
+            )
+            save_backup_csv(lba_rows + lbb_rows, backup_path)
+
+            # Stats brutes
+            lba_sirets = {r["SIRET"] for r in lba_rows if r.get("SIRET")}
+            lbb_sirets = {r["SIRET"] for r in lbb_rows if r.get("SIRET")}
+
+            # Déduplication intra-ville
+            rows, n_doublons = deduplicate(lba_rows, lbb_rows)
+            for row in rows:
+                row.setdefault("Ville de recherche", ville)
+
+            city_stats[ville] = {
+                "n_lba": len(lba_sirets),
+                "n_lbb": len(lbb_sirets - lba_sirets),
+                "n_doublons": n_doublons,
+                "n_unique": len(rows),
+            }
+            all_city_results[ville] = rows
+            print(f"  ✅ {len(rows)} entreprises uniques pour {ville}")
+
+            # Nettoyage backup
+            if os.path.exists(backup_path):
+                os.remove(backup_path)
+
+        except Exception as e:
+            print(f"  ❌ Erreur pour {ville} : {e}")
+            all_city_results[ville] = []
+            city_stats[ville] = {
+                "n_lba": 0, "n_lbb": 0, "n_doublons": 0, "n_unique": 0,
+            }
+            continue
+
+    # 3. Vérification globale
+    if not any(all_city_results.values()):
+        print("\n⚠️  Aucune entreprise collectée pour aucune ville.")
         sys.exit(0)
 
-    # 6. Export
-    print("\n── Export ──────────────────────────────────────")
-    xlsx_path, csv_path = export_results(rows, output_dir, ville)
-    print(f"  ✅ {xlsx_path}")
-    print(f"  ✅ {csv_path}")
+    # 4. Export
+    if multi:
+        xlsx_path = os.path.join(output_dir, f"lba_lbb_results_multi_{today_str}.xlsx")
+        csv_path = xlsx_path.replace(".xlsx", ".csv")
 
-    # Nettoyage backup intermédiaire (le CSV final le remplace)
-    if os.path.exists(backup_path) and backup_path != csv_path:
-        os.remove(backup_path)
+        # Consolidé : dédup globale par SIRET
+        all_rows = []
+        for rows in all_city_results.values():
+            all_rows.extend(rows)
+        seen_sirets: set[str] = set()
+        consolidated: list[dict] = []
+        for row in all_rows:
+            siret = row.get("SIRET", "")
+            if siret and siret in seen_sirets:
+                continue
+            if siret:
+                seen_sirets.add(siret)
+            consolidated.append(row)
 
-    # 7. Synthèse
-    print_synthese(
-        ville, rayon, naf_codes, rome_codes, rows,
-        n_lba_unique, n_lbb_unique, n_doublons,
-        xlsx_path, csv_path,
-    )
+        columns = EXCEL_COLUMNS
+        with pd.ExcelWriter(xlsx_path, engine="openpyxl") as writer:
+            for ville, rows in all_city_results.items():
+                if rows:
+                    df = pd.DataFrame(rows, columns=columns)
+                    df["SIRET"] = df["SIRET"].astype(str)
+                    df.to_excel(writer, sheet_name=ville[:31], index=False)
+            df_all = pd.DataFrame(consolidated, columns=columns)
+            df_all["SIRET"] = df_all["SIRET"].astype(str)
+            df_all.to_excel(writer, sheet_name="Consolidé", index=False)
+
+        df_all.to_csv(csv_path, index=False, encoding="utf-8-sig")
+
+        print(f"\n── Export multi-villes ──────────────────────────")
+        print(f"  ✅ {xlsx_path}")
+        print(f"  ✅ {csv_path}")
+        print()
+        print("══════════════════════════════════════════════════")
+        print("  RÉSULTATS MULTI-VILLES — LBA + LBB")
+        print(f"  NAF : {', '.join(naf_codes)} → ROME : {', '.join(rome_codes)}")
+        print()
+        for ville, st in city_stats.items():
+            print(f"  📍 {ville}: {st['n_unique']} uniques "
+                  f"({st['n_lba']} LBA, {st['n_lbb']} LBB, {st['n_doublons']} doublons)")
+        print("  ──────────────────────────────────────────────")
+        print(f"  Total consolidé (dédup SIRET) : {len(consolidated)} entreprises")
+        print(f"  📁 Fichier : {os.path.basename(xlsx_path)}")
+        print("══════════════════════════════════════════════════")
+    else:
+        # Mode mono-ville (rétrocompatible)
+        ville = villes[0]
+        rows = all_city_results.get(ville, [])
+        if not rows:
+            print("\n⚠️  Aucune entreprise collectée.")
+            sys.exit(0)
+        xlsx_path, csv_path = export_results(rows, output_dir, ville)
+        st = city_stats[ville]
+        print_synthese(
+            ville, rayon, naf_codes, rome_codes, rows,
+            st["n_lba"], st["n_lbb"], st["n_doublons"],
+            xlsx_path, csv_path,
+        )
 
 
 if __name__ == "__main__":
