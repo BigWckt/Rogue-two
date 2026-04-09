@@ -173,13 +173,16 @@ Réécriture du script selon la doc technique `README_scraper_pj.md` (scraper pr
 - **script_comparaison.py** : lecture "Consolidé" pour LBA/LBB et "Entreprises" pour PJ enrichi
 
 #### Fix proxy Chromium (script_pages_jaunes.py)
-- **Problème** : `detect_proxy()` lisait `HTTP_PROXY` / `HTTPS_PROXY` et les passait à Chromium via `launch_kwargs["proxy"]`. Chromium ne supporte pas l'auth JWT du proxy sandbox → `ERR_INVALID_AUTH_CREDENTIALS`.
+- **Problème** : `detect_proxy()` lisait `HTTP_PROXY` / `HTTPS_PROXY` et les passait à Chromium comme `{"server": full_url}`. Deux bugs :
+  1. Chromium hérite aussi le proxy via env vars → double-proxy → `ERR_INVALID_AUTH_CREDENTIALS`
+  2. L'URL proxy complète (avec auth) passée dans `server` au lieu d'être séparée en `server`/`username`/`password`
 - **Correction** :
   1. Supprimé `detect_proxy()` — plus d'auto-détection des variables d'environnement
-  2. Ajouté `--no-proxy-server` aux args de lancement Chromium → ignore les proxy système
-  3. Ajouté option CLI `--proxy http://user:pass@host:port` pour proxy explicite si besoin
-  4. Ajouté délai 12s après chaque navigation (`DELAY_AFTER_NAV`) — aligné sur scraper_lyon_btpm.py
-- **Résultat** : `ERR_INVALID_AUTH_CREDENTIALS` résolu. En sandbox, `ERR_NAME_NOT_RESOLVED` persiste (pas de DNS direct) — normal, le scraping PJ nécessite un accès réseau non-proxifié.
+  2. Ajouté `--no-proxy-server` aux args de lancement Chromium par défaut (sortie directe)
+  3. Ajouté option CLI `--proxy http://user:pass@host:port` avec parsing correct via `urlparse` (sépare server/username/password pour Playwright)
+  4. Ajouté `--ignore-certificate-errors` pour les proxies MITM SSL
+  5. Ajouté délai 12s après chaque navigation (`DELAY_AFTER_NAV`)
+- **Résultat** : Scraping PJ fonctionnel avec `--proxy "$HTTPS_PROXY"` — 168 fiches collectées
 
 ### Résultats — Batch 2 Agences Immobilières
 
@@ -195,19 +198,40 @@ Réécriture du script selon la doc technique `README_scraper_pj.md` (scraper pr
 - Rayon 0 km → aucun résultat → fallback automatique 1 km → OK
 - Fichier : `Batch_2_0426/lba_lbb_results_multi_20260409.xlsx` (3 onglets)
 
-#### Étape 2 — Scraping Pages Jaunes ⚠️
-- 0 fiches collectées (sandbox sans accès réseau direct vers pagesjaunes.fr)
-- Script fonctionnel — à relancer en local
+#### Étape 2 — Scraping Pages Jaunes ✅
+| Ville | Fiches | Pages | Blocages CF |
+|---|---|---|---|
+| Boulogne-Billancourt | 105 | 7 | 0 |
+| Paris 20 | 68 | 5 | 0 |
+| **Consolidé (dédup nom+CP)** | **168** | **12** | **0** |
 
-#### Étape 3 — Enrichissement SIRET ⏭️
-- Sautée (pas de données PJ)
+- Warmup CF OK, 0 blocage Cloudflare
+- Lancé avec `--proxy "$HTTPS_PROXY"` + `--ignore-certificate-errors` + `--no-proxy-server` désactivé quand proxy explicite
+- Fichier : `Batch_2_0426/pj_results_multi_20260409.xlsx` (3 onglets)
+
+#### Étape 3 — Enrichissement SIRET ✅
+- 168 entreprises traitées → **75 SIRET trouvés (45%)**
+- 93 exclus (similarité < 80% ou SIRET introuvable)
+- 58 erreurs API (rate-limiting 429 intensif)
+- Taux attendu sans rate-limit : ~60-70%
+- Fichier : `Batch_2_0426/pj_results_multi_20260409_enrichi.xlsx` (2 onglets)
 
 #### Étape 4 — Croisement final ✅
+- PJ enrichi : 73 entreprises avec SIRET
+- LBA/LBB : 38 entreprises avec SIRET
+- **Correspondances PJ ↔ LBA/LBB (même SIRET) : 2**
+
 | Priorité | Nombre |
 |---|---|
 | Haute (LBA) | 0 |
 | Moyenne (LBB) | 38 |
-| Basse (PJ seul) | 0 |
-| **Total** | **38** |
+| Basse (PJ seul) | 71 |
+| **Total** | **109** |
 
 - Fichier : `Batch_2_0426/leads_qualifies_multi_20260409.xlsx` (4 onglets)
+
+### Fichiers générés (Batch_2_0426/)
+- `lba_lbb_results_multi_20260409.xlsx` (11 Ko) — 38 agences LBB
+- `pj_results_multi_20260409.xlsx` (29 Ko) — 168 fiches PJ
+- `pj_results_multi_20260409_enrichi.xlsx` (20 Ko) — 75 avec SIRET
+- `leads_qualifies_multi_20260409.xlsx` (24 Ko) — 109 leads qualifiés

@@ -25,7 +25,7 @@ import re
 import sys
 import time
 from datetime import date
-from urllib.parse import quote
+from urllib.parse import quote, urlparse
 
 import pandas as pd
 
@@ -263,6 +263,7 @@ def scrape_pages_jaunes(activite: str, ville: str, nb_max: int,
             "--no-sandbox",
             "--disable-blink-features=AutomationControlled",
             "--disable-dev-shm-usage",
+            "--ignore-certificate-errors",
         ]
 
         # Par défaut : sortie directe, ignorer les proxy système
@@ -278,8 +279,16 @@ def scrape_pages_jaunes(activite: str, ville: str, nb_max: int,
 
         # Proxy uniquement si fourni explicitement via --proxy
         if proxy_url:
-            launch_kwargs["proxy"] = {"server": proxy_url}
-            print(f"  🔌 Proxy explicite : {proxy_url[:50]}…")
+            parsed = urlparse(proxy_url)
+            proxy_cfg: dict = {
+                "server": f"{parsed.scheme}://{parsed.hostname}:{parsed.port}",
+            }
+            if parsed.username:
+                proxy_cfg["username"] = parsed.username
+            if parsed.password:
+                proxy_cfg["password"] = parsed.password
+            launch_kwargs["proxy"] = proxy_cfg
+            print(f"  🔌 Proxy explicite : {proxy_cfg['server']}")
         else:
             print("  🔌 Sortie directe (pas de proxy)")
 
