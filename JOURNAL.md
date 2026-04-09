@@ -159,3 +159,55 @@ Réécriture du script selon la doc technique `README_scraper_pj.md` (scraper pr
 **Test 2 — LBA/LBB seul (162 entreprises, sans PJ) :**
 - Priorité Haute : 12 | Moyenne : 150 | Basse : 0
 - Total : 162 leads qualifiés
+
+---
+
+## 2026-04-09 — Mode multi-villes + fix proxy PJ
+
+### Ce qui a été fait
+
+#### Mode multi-villes (4 scripts)
+- **script_lba_lbb.py** : détection `ville` / `villes` dans le JSON config, boucle séquentielle sur chaque ville, onglets Excel par ville + onglet "Consolidé" avec dédup globale par SIRET, colonne "Ville de recherche", gestion rayon 0 (fallback 1 km), résilience par ville (try/except + continue)
+- **script_pages_jaunes.py** : même support multi-villes, dédup globale sur (nom, code postal), onglets par ville + Consolidé
+- **script_enrichissement.py** : lecture automatique de l'onglet "Consolidé" si présent dans le fichier d'entrée
+- **script_comparaison.py** : lecture "Consolidé" pour LBA/LBB et "Entreprises" pour PJ enrichi
+
+#### Fix proxy Chromium (script_pages_jaunes.py)
+- **Problème** : `detect_proxy()` lisait `HTTP_PROXY` / `HTTPS_PROXY` et les passait à Chromium via `launch_kwargs["proxy"]`. Chromium ne supporte pas l'auth JWT du proxy sandbox → `ERR_INVALID_AUTH_CREDENTIALS`.
+- **Correction** :
+  1. Supprimé `detect_proxy()` — plus d'auto-détection des variables d'environnement
+  2. Ajouté `--no-proxy-server` aux args de lancement Chromium → ignore les proxy système
+  3. Ajouté option CLI `--proxy http://user:pass@host:port` pour proxy explicite si besoin
+  4. Ajouté délai 12s après chaque navigation (`DELAY_AFTER_NAV`) — aligné sur scraper_lyon_btpm.py
+- **Résultat** : `ERR_INVALID_AUTH_CREDENTIALS` résolu. En sandbox, `ERR_NAME_NOT_RESOLVED` persiste (pas de DNS direct) — normal, le scraping PJ nécessite un accès réseau non-proxifié.
+
+### Résultats — Batch 2 Agences Immobilières
+
+**Paramètres** : villes = [Boulogne-Billancourt, Paris 20], NAF = 68.31Z, rayon = 0 km
+
+#### Étape 1 — Collecte LBA/LBB ✅
+| Ville | LBA | LBB | Doublons | Total unique |
+|---|---|---|---|---|
+| Boulogne-Billancourt | 0 | 29 | 0 | 29 |
+| Paris 20 | 0 | 9 | 0 | 9 |
+| **Consolidé** | **0** | **38** | **0** | **38** |
+
+- Rayon 0 km → aucun résultat → fallback automatique 1 km → OK
+- Fichier : `Batch_2_0426/lba_lbb_results_multi_20260409.xlsx` (3 onglets)
+
+#### Étape 2 — Scraping Pages Jaunes ⚠️
+- 0 fiches collectées (sandbox sans accès réseau direct vers pagesjaunes.fr)
+- Script fonctionnel — à relancer en local
+
+#### Étape 3 — Enrichissement SIRET ⏭️
+- Sautée (pas de données PJ)
+
+#### Étape 4 — Croisement final ✅
+| Priorité | Nombre |
+|---|---|
+| Haute (LBA) | 0 |
+| Moyenne (LBB) | 38 |
+| Basse (PJ seul) | 0 |
+| **Total** | **38** |
+
+- Fichier : `Batch_2_0426/leads_qualifies_multi_20260409.xlsx` (4 onglets)

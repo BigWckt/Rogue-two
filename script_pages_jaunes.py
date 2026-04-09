@@ -62,6 +62,7 @@ EXCEL_COLUMNS = [
 PJ_BASE_URL = "https://www.pagesjaunes.fr"
 SAVE_EVERY = 50
 MAX_EMPTY_PAGES = 3
+DELAY_AFTER_NAV = 12       # secondes d'attente après chaque navigation
 DELAY_SAME_KEYWORD = 5    # secondes entre deux pages du même mot-clé
 DELAY_BETWEEN_KEYWORDS = 8  # secondes entre deux mots-clés différents
 CF_POLL_INTERVAL = 5       # secondes entre chaque vérif du titre CF
@@ -103,14 +104,6 @@ def find_chromium() -> str | None:
     if hs_paths:
         print("  ⚠️  Seul le headless shell est dispo — le bypass CF peut échouer")
         return hs_paths[-1]
-    return None
-
-
-def detect_proxy() -> dict | None:
-    """Détecte proxy depuis les variables d'environnement."""
-    proxy_url = os.environ.get("HTTPS_PROXY") or os.environ.get("HTTP_PROXY")
-    if proxy_url:
-        return {"server": proxy_url}
     return None
 
 
@@ -231,10 +224,11 @@ def save_intermediate_csv(fiches: list[dict], filepath: str):
 # ── Scraping principal ───────────────────────────────────────────────────────
 
 def scrape_pages_jaunes(activite: str, ville: str, nb_max: int,
-                        output_dir: str) -> tuple[list[dict], dict]:
+                        output_dir: str, proxy_url: str | None = None) -> tuple[list[dict], dict]:
     """
     Scrape Pages Jaunes via Playwright avec bypass Cloudflare.
     Retourne (fiches, stats).
+    proxy_url : URL proxy explicite (ex: http://user:pass@host:port), None = sortie directe.
     """
     from playwright.sync_api import sync_playwright
 
@@ -271,16 +265,23 @@ def scrape_pages_jaunes(activite: str, ville: str, nb_max: int,
             "--disable-dev-shm-usage",
         ]
 
+        # Par défaut : sortie directe, ignorer les proxy système
+        # (HTTPS_PROXY / HTTP_PROXY causent ERR_INVALID_AUTH_CREDENTIALS)
+        if not proxy_url:
+            launch_args.append("--no-proxy-server")
+
         launch_kwargs: dict = {
             "headless": True,
             "executable_path": exec_path,
             "args": launch_args,
         }
 
-        proxy = detect_proxy()
-        if proxy:
-            launch_kwargs["proxy"] = proxy
-            print(f"  🔌 Proxy détecté : {proxy['server'][:50]}…")
+        # Proxy uniquement si fourni explicitement via --proxy
+        if proxy_url:
+            launch_kwargs["proxy"] = {"server": proxy_url}
+            print(f"  🔌 Proxy explicite : {proxy_url[:50]}…")
+        else:
+            print("  🔌 Sortie directe (pas de proxy)")
 
         browser = p.chromium.launch(**launch_kwargs)
         ua = random.choice(USER_AGENTS)
@@ -303,6 +304,7 @@ def scrape_pages_jaunes(activite: str, ville: str, nb_max: int,
                 "?quoiqui=fleuriste&ou=Paris+20"
             )
             page.goto(warmup_url, wait_until="domcontentloaded", timeout=30_000)
+            time.sleep(DELAY_AFTER_NAV)
             if wait_for_pj_content(page, timeout_s=CF_TIMEOUT):
                 print("✅ Cookie CF établi")
             else:
@@ -323,6 +325,7 @@ def scrape_pages_jaunes(activite: str, ville: str, nb_max: int,
                     time.sleep(DELAY_SAME_KEYWORD)
 
                 page.goto(url, wait_until="domcontentloaded", timeout=30_000)
+                time.sleep(DELAY_AFTER_NAV)
 
                 # Attente adaptative : vérifier le titre toutes les 5s
                 if not wait_for_pj_content(page, timeout_s=CF_TIMEOUT):
@@ -462,6 +465,8 @@ def parse_args():
     parser.add_argument("--output", type=str, default=".",
                         help="Répertoire de sortie")
     parser.add_argument("--config", type=str, help="Fichier JSON de paramètres")
+    parser.add_argument("--proxy", type=str, default=None,
+                        help="Proxy explicite (ex: http://user:pass@host:port)")
     return parser.parse_args()
 
 
@@ -518,7 +523,9 @@ def main():
         print(f"{'═' * 50}")
 
         try:
-            fiches, stats = scrape_pages_jaunes(activite, ville, nb_max, output_dir)
+            fiches, stats = scrape_pages_jaunes(
+                activite, ville, nb_max, output_dir, proxy_url=args.proxy,
+            )
 
             # Ajouter "Ville de recherche"
             for f in fiches:
