@@ -17,7 +17,6 @@ Usage :
 
 import argparse
 import csv
-import glob as _glob
 import json
 import os
 import random
@@ -28,6 +27,13 @@ from datetime import date
 from urllib.parse import quote, urlparse
 
 import pandas as pd
+
+from matrix_display import (
+    GREEN, RED, BOLD, RESET,
+    matrix_banner, matrix_section, matrix_kv, matrix_separator,
+    matrix_step, matrix_ok, matrix_fail, matrix_warn,
+    morpheus_says, ask_filename,
+)
 
 # ── User-Agent pool ──────────────────────────────────────────────────────────
 
@@ -44,7 +50,7 @@ USER_AGENTS = [
 
 # ── Colonnes de sortie (cohérentes avec script_lba_lbb.py) ───────────────────
 
-EXCEL_COLUMNS = [
+OUTPUT_COLUMNS = [
     "Nom de l'entreprise",
     "Adresse",
     "Ville",
@@ -89,21 +95,8 @@ def validate_phone(raw: str) -> str:
     return ""
 
 
-def find_chromium() -> str | None:
-    """Cherche le vrai Chromium (pas headless shell) installé par Playwright."""
-    # Préférer le vrai Chrome (pas le headless shell) — requis pour le bypass CF
-    chrome_paths = sorted(_glob.glob(
-        "/root/.cache/ms-playwright/chromium-*/chrome-linux/chrome"
-    ))
-    if chrome_paths:
-        return chrome_paths[-1]
-    # Fallback headless shell (moins fiable pour CF)
-    hs_paths = sorted(_glob.glob(
-        "/root/.cache/ms-playwright/chromium_headless_shell-*/chrome-headless-shell-linux64/chrome-headless-shell"
-    ))
-    if hs_paths:
-        print("  ⚠️  Seul le headless shell est dispo — le bypass CF peut échouer")
-        return hs_paths[-1]
+def find_chromium():
+    """Retourne None — Playwright détecte automatiquement le binaire Chromium."""
     return None
 
 
@@ -171,12 +164,10 @@ def parse_bloc(bloc) -> dict | None:
     cp, ville = extract_cp_ville(adresse)
 
     # Téléphone : li .bi-fantomas .number-contact
-    # Note : .bi-fantomas est un div FRÈRE de .bi-content, pas imbriqué dedans
     tel = ""
     tel_el = bloc.query_selector(".bi-fantomas .number-contact")
     if tel_el:
         raw_tel = tel_el.inner_text().strip()
-        # Nettoyer le préfixe "Tél : "
         raw_tel = re.sub(r"^T[ée]l\s*:\s*", "", raw_tel)
         tel = validate_phone(raw_tel)
 
@@ -214,11 +205,11 @@ def save_intermediate_csv(fiches: list[dict], filepath: str):
     """Sauvegarde CSV intermédiaire pour reprise."""
     try:
         with open(filepath, "w", newline="", encoding="utf-8-sig") as f:
-            writer = csv.DictWriter(f, fieldnames=EXCEL_COLUMNS)
+            writer = csv.DictWriter(f, fieldnames=OUTPUT_COLUMNS)
             writer.writeheader()
             writer.writerows(fiches)
     except Exception as e:
-        print(f"  ⚠️  Erreur sauvegarde intermédiaire : {e}")
+        matrix_warn(f"Erreur sauvegarde intermédiaire : {e}")
 
 
 # ── Scraping principal ───────────────────────────────────────────────────────
@@ -239,13 +230,8 @@ def scrape_pages_jaunes(activite: str, ville: str, nb_max: int,
         "blocages_cf": 0,
     }
 
-    exec_path = find_chromium()
-    if not exec_path:
-        print("❌ Aucun binaire Chromium trouvé.")
-        print("   Installer avec : playwright install chromium")
-        sys.exit(1)
-
-    print(f"  🌐 Chromium : {exec_path}")
+    exec_path = None
+    matrix_step("Chromium : auto-détecté par Playwright")
 
     # Backup CSV path
     today_str = date.today().strftime("%Y%m%d")
@@ -267,13 +253,11 @@ def scrape_pages_jaunes(activite: str, ville: str, nb_max: int,
         ]
 
         # Par défaut : sortie directe, ignorer les proxy système
-        # (HTTPS_PROXY / HTTP_PROXY causent ERR_INVALID_AUTH_CREDENTIALS)
         if not proxy_url:
             launch_args.append("--no-proxy-server")
 
         launch_kwargs: dict = {
             "headless": True,
-            "executable_path": exec_path,
             "args": launch_args,
         }
 
@@ -288,9 +272,9 @@ def scrape_pages_jaunes(activite: str, ville: str, nb_max: int,
             if parsed.password:
                 proxy_cfg["password"] = parsed.password
             launch_kwargs["proxy"] = proxy_cfg
-            print(f"  🔌 Proxy explicite : {proxy_cfg['server']}")
+            matrix_ok(f"Proxy explicite : {proxy_cfg['server']}")
         else:
-            print("  🔌 Sortie directe (pas de proxy)")
+            matrix_ok("Sortie directe (pas de proxy)")
 
         browser = p.chromium.launch(**launch_kwargs)
         ua = random.choice(USER_AGENTS)
@@ -305,8 +289,8 @@ def scrape_pages_jaunes(activite: str, ville: str, nb_max: int,
         page = context.new_page()
         page.set_default_timeout(30_000)
 
-        # ── Warmup CF : navigation bidon pour établir le cookie CF ────────
-        print("  📡 Warmup CF (fleuriste Paris 20)…", end=" ", flush=True)
+        # ── Warmup CF ────────
+        matrix_step("Warmup Cloudflare (fleuriste Paris 20)...")
         try:
             warmup_url = (
                 f"{PJ_BASE_URL}/annuaire/chercherlespros"
@@ -315,52 +299,49 @@ def scrape_pages_jaunes(activite: str, ville: str, nb_max: int,
             page.goto(warmup_url, wait_until="domcontentloaded", timeout=30_000)
             time.sleep(DELAY_AFTER_NAV)
             if wait_for_pj_content(page, timeout_s=CF_TIMEOUT):
-                print("✅ Cookie CF établi")
+                matrix_ok("Cookie Cloudflare établi")
             else:
-                print("⚠️  Timeout CF — le scraping risque d'échouer")
+                matrix_warn("Timeout CF — le scraping risque d'échouer")
                 stats["blocages_cf"] += 1
         except Exception as e:
-            print(f"⚠️  {e}")
+            matrix_warn(f"Warmup CF : {e}")
 
-        # ── Boucle de pagination ──────────────────────────────────────────
+        # ── Boucle de pagination ──
         page_num = 1
         while len(fiches) < nb_max:
             url = build_search_url(activite, ville, page_num)
-            print(f"  📡 Page {page_num}…", end=" ", flush=True)
+            matrix_step(f"Scraping page {page_num}...")
 
             try:
-                # Délai entre pages (5s même mot-clé)
                 if page_num > 1:
                     time.sleep(DELAY_SAME_KEYWORD)
 
                 page.goto(url, wait_until="domcontentloaded", timeout=30_000)
                 time.sleep(DELAY_AFTER_NAV)
 
-                # Attente adaptative : vérifier le titre toutes les 5s
                 if not wait_for_pj_content(page, timeout_s=CF_TIMEOUT):
-                    print(f"⚠️  Timeout CF ({CF_TIMEOUT}s)")
+                    matrix_warn(f"Timeout CF ({CF_TIMEOUT}s)")
                     consecutive_empty += 1
                     stats["blocages_cf"] += 1
                     if consecutive_empty >= MAX_EMPTY_PAGES:
-                        print(f"  🛑 {MAX_EMPTY_PAGES} pages bloquées consécutives — arrêt")
+                        matrix_fail(f"{MAX_EMPTY_PAGES} pages bloquées consécutives — arrêt")
                         break
                     page_num += 1
                     continue
 
             except Exception as e:
-                print(f"❌ {e}")
+                matrix_fail(f"{e}")
                 consecutive_empty += 1
                 if consecutive_empty >= MAX_EMPTY_PAGES:
-                    print(f"  🛑 {MAX_EMPTY_PAGES} pages échouées consécutives — arrêt")
+                    matrix_fail(f"{MAX_EMPTY_PAGES} pages échouées consécutives — arrêt")
                     stats["blocages_cf"] = consecutive_empty
                     break
                 page_num += 1
                 continue
 
-            # Extraire les blocs entreprise (<li> contenant .bi-content)
+            # Extraire les blocs entreprise
             blocs = page.query_selector_all("li:has(.bi-content)")
             if not blocs:
-                # Fallbacks
                 blocs = page.query_selector_all(
                     "article.bi-bloc, div[class*='bi-bloc'], li[class*='bi-bloc']"
                 )
@@ -369,9 +350,9 @@ def scrape_pages_jaunes(activite: str, ville: str, nb_max: int,
 
             if not blocs:
                 consecutive_empty += 1
-                print(f"0 fiches (vide {consecutive_empty}/{MAX_EMPTY_PAGES})")
+                matrix_warn(f"0 fiches (vide {consecutive_empty}/{MAX_EMPTY_PAGES})")
                 if consecutive_empty >= MAX_EMPTY_PAGES:
-                    print(f"  🛑 {MAX_EMPTY_PAGES} pages vides consécutives — arrêt (blocage CF probable)")
+                    matrix_fail(f"{MAX_EMPTY_PAGES} pages vides consécutives — arrêt (blocage CF probable)")
                     stats["blocages_cf"] = consecutive_empty
                     break
                 page_num += 1
@@ -403,17 +384,17 @@ def scrape_pages_jaunes(activite: str, ville: str, nb_max: int,
                 page_count += 1
 
             stats["pages_parcourues"] = page_num
-            print(f"✅ {page_count} fiches ({len(fiches)} total)")
+            matrix_ok(f"{page_count} fiches ({len(fiches)} total)")
 
-            # Sauvegarde intermédiaire toutes les SAVE_EVERY fiches
+            # Sauvegarde intermédiaire
             if len(fiches) % SAVE_EVERY < page_count:
                 save_intermediate_csv(fiches, backup_path)
-                print(f"  💾 Sauvegarde intermédiaire ({len(fiches)} fiches)")
+                matrix_step(f"Sauvegarde intermédiaire ({len(fiches)} fiches)")
 
-            # Pagination : a#pagination-next
+            # Pagination
             has_next = page.query_selector("a#pagination-next")
             if not has_next:
-                print("  ℹ️  Dernière page atteinte")
+                matrix_ok("Dernière page atteinte")
                 break
 
             page_num += 1
@@ -423,42 +404,12 @@ def scrape_pages_jaunes(activite: str, ville: str, nb_max: int,
     return fiches, stats
 
 
-# ── Export ────────────────────────────────────────────────────────────────────
+# ── Export CSV ───────────────────────────────────────────────────────────────
 
-def export_results(fiches: list[dict], output_dir: str,
-                   ville: str) -> tuple[str, str]:
-    today_str = date.today().strftime("%Y%m%d")
-    ville_slug = ville.lower().replace(" ", "_").replace("-", "_")
-    base_name = f"pj_results_{ville_slug}_{today_str}"
-    xlsx_path = os.path.join(output_dir, f"{base_name}.xlsx")
-    csv_path = os.path.join(output_dir, f"{base_name}.csv")
-
-    df = pd.DataFrame(fiches, columns=EXCEL_COLUMNS)
-    df.to_excel(xlsx_path, index=False, engine="openpyxl")
+def export_csv(fiches: list[dict], csv_path: str):
+    """Exporte en CSV uniquement."""
+    df = pd.DataFrame(fiches, columns=OUTPUT_COLUMNS)
     df.to_csv(csv_path, index=False, encoding="utf-8-sig")
-
-    return xlsx_path, csv_path
-
-
-# ── Synthèse console ─────────────────────────────────────────────────────────
-
-def print_synthese(ville: str, activite: str, fiches: list[dict],
-                   stats: dict, xlsx_path: str, csv_path: str):
-    n_total = len(fiches)
-    print()
-    print("══════════════════════════════════════════════════")
-    print(f"  RÉSULTATS — Pages Jaunes — {ville}")
-    print(f"  Recherche : \"{activite}\"")
-    print()
-    print(f"  Fiches collectées      : {stats['fiches_brutes']}")
-    print(f"  Doublons supprimés     : {stats['doublons']}")
-    print(f"  Fiches retenues        : {n_total}")
-    print(f"  Pages parcourues       : {stats['pages_parcourues']}")
-    print(f"  Blocages CF détectés   : {stats['blocages_cf']}")
-    print()
-    print(f"  📁 Fichier : {os.path.basename(xlsx_path)}")
-    print(f"  📁 Backup  : {os.path.basename(csv_path)}")
-    print("══════════════════════════════════════════════════")
 
 
 # ── CLI ───────────────────────────────────────────────────────────────────────
@@ -472,7 +423,7 @@ def parse_args():
     parser.add_argument("--nb-max", type=int, default=100,
                         help="Nombre max de résultats (défaut: 100)")
     parser.add_argument("--output", type=str, default=".",
-                        help="Répertoire de sortie")
+                        help="Répertoire de sortie (défaut: racine repo)")
     parser.add_argument("--config", type=str, help="Fichier JSON de paramètres")
     parser.add_argument("--proxy", type=str, default=None,
                         help="Proxy explicite (ex: http://user:pass@host:port)")
@@ -484,24 +435,23 @@ def load_config(args) -> tuple[list[str], str, int, str]:
     if args.config:
         with open(args.config, encoding="utf-8") as f:
             cfg = json.load(f)
-        # Support "ville" (string) ou "villes" (array)
         if "villes" in cfg:
             villes = cfg["villes"]
         elif "ville" in cfg:
             villes = [cfg["ville"]]
         else:
-            print("❌ Clé 'ville' ou 'villes' manquante dans le JSON")
+            matrix_fail("Clé 'ville' ou 'villes' manquante dans le JSON")
             sys.exit(1)
         activite = cfg["type_commerce"]
         nb_max = cfg.get("nb_max_resultats", 100)
-        output_dir = cfg.get("output", ".")
+        output_dir = args.output  # toujours CLI, jamais le JSON
     elif args.ville and args.activite:
         villes = [args.ville]
         activite = args.activite
         nb_max = args.nb_max
         output_dir = args.output
     else:
-        print("❌ Spécifiez --ville et --activite, ou --config")
+        matrix_fail("Spécifiez --ville et --activite, ou --config")
         sys.exit(1)
 
     os.makedirs(output_dir, exist_ok=True)
@@ -515,34 +465,40 @@ def main():
     villes, activite, nb_max, output_dir = load_config(args)
     multi = len(villes) > 1
 
-    print("══════════════════════════════════════════════════")
-    print("  SCRAPING PAGES JAUNES")
-    print(f"  Villes   : {', '.join(villes)}")
-    print(f"  Activité : {activite}")
-    print(f"  Max      : {nb_max} fiches par ville")
-    print("══════════════════════════════════════════════════")
+    # ── Bannière Matrix ──
+    matrix_banner("SCRAPING PAGES JAUNES")
 
+    matrix_kv("Villes", ", ".join(villes))
+    matrix_kv("Activité", activite)
+    matrix_kv("Max fiches/ville", str(nb_max))
+
+    # ── Nom de fichier interactif ──
+    today_str = date.today().strftime("%Y%m%d")
+    if multi:
+        default_name = f"pj_results_multi_{today_str}"
+    else:
+        ville_slug = villes[0].lower().replace(" ", "_").replace("-", "_")
+        default_name = f"pj_results_{ville_slug}_{today_str}"
+    filename = ask_filename(default_name)
+
+    # ── Boucle sur les villes ──
     all_city_results: dict[str, list[dict]] = {}
     all_city_stats: dict[str, dict] = {}
-    today_str = date.today().strftime("%Y%m%d")
 
     for ville in villes:
-        print(f"\n{'═' * 50}")
-        print(f"  📍 {ville}")
-        print(f"{'═' * 50}")
+        matrix_section(f"Infiltration Pages Jaunes — {ville}")
 
         try:
             fiches, stats = scrape_pages_jaunes(
                 activite, ville, nb_max, output_dir, proxy_url=args.proxy,
             )
 
-            # Ajouter "Ville de recherche"
             for f in fiches:
                 f["Ville de recherche"] = ville
 
             all_city_results[ville] = fiches
             all_city_stats[ville] = stats
-            print(f"  ✅ {len(fiches)} fiches pour {ville}")
+            matrix_ok(f"{len(fiches)} fiches pour {ville}")
 
             # Cleanup backup per-city
             ville_slug = ville.lower().replace(" ", "_").replace("-", "_")
@@ -553,7 +509,7 @@ def main():
                 os.remove(backup_path)
 
         except Exception as e:
-            print(f"  ❌ Erreur pour {ville} : {e}")
+            matrix_fail(f"Erreur pour {ville} : {e}")
             all_city_results[ville] = []
             all_city_stats[ville] = {
                 "pages_parcourues": 0, "fiches_brutes": 0,
@@ -562,13 +518,13 @@ def main():
             continue
 
     if not any(all_city_results.values()):
-        print("\n⚠️  Aucune fiche collectée pour aucune ville.")
+        matrix_warn("Aucune fiche collectée pour aucune ville.")
         sys.exit(0)
 
-    if multi:
-        xlsx_path = os.path.join(output_dir, f"pj_results_multi_{today_str}.xlsx")
-        csv_path = xlsx_path.replace(".xlsx", ".csv")
+    # ── Export CSV ──
+    csv_path = os.path.join(output_dir, f"{filename}.csv")
 
+    if multi:
         # Consolidé : dédup globale sur (nom, code postal)
         all_fiches: list[dict] = []
         for fiches in all_city_results.values():
@@ -582,46 +538,46 @@ def main():
             seen_keys.add(key)
             consolidated.append(f)
 
-        columns = EXCEL_COLUMNS
-        with pd.ExcelWriter(xlsx_path, engine="openpyxl") as writer:
-            for ville, fiches in all_city_results.items():
-                if fiches:
-                    df = pd.DataFrame(fiches, columns=columns)
-                    df.to_excel(writer, sheet_name=ville[:31], index=False)
-            df_all = pd.DataFrame(consolidated, columns=columns)
-            df_all.to_excel(writer, sheet_name="Consolidé", index=False)
+        matrix_step("Export CSV consolidé...")
+        export_csv(consolidated, csv_path)
+        matrix_ok(f"Fichier : {csv_path}")
 
-        df_all.to_csv(csv_path, index=False, encoding="utf-8-sig")
-
-        print(f"\n── Export multi-villes ──────────────────────────")
-        print(f"  ✅ {xlsx_path}")
-        print(f"  ✅ {csv_path}")
-        print()
-        print("══════════════════════════════════════════════════")
-        print("  RÉSULTATS MULTI-VILLES — Pages Jaunes")
-        print(f"  Recherche : \"{activite}\"")
+        # ── Synthèse ──
+        matrix_section("RÉSULTATS — Données aspirées de la Matrice")
+        matrix_kv("Recherche", f'"{activite}"')
         print()
         for ville, st in all_city_stats.items():
             n = len(all_city_results.get(ville, []))
-            print(f"  📍 {ville}: {n} fiches "
+            print(f"    {GREEN}▸{RESET} {ville}: {BOLD}{n}{RESET} fiches "
                   f"({st.get('pages_parcourues', 0)} pages, "
                   f"{st.get('blocages_cf', 0)} blocages CF)")
-        print("  ──────────────────────────────────────────────")
-        print(f"  Total consolidé (dédup nom+CP) : {len(consolidated)} fiches")
-        print(f"  📁 Fichier : {os.path.basename(xlsx_path)}")
-        print("══════════════════════════════════════════════════")
+        matrix_separator()
+        matrix_kv("Total consolidé (dédup nom+CP)", f"{len(consolidated)} fiches")
+        matrix_kv("Fichier", os.path.basename(csv_path))
     else:
         ville = villes[0]
         fiches = all_city_results.get(ville, [])
         if not fiches:
-            print("\n⚠️  Aucune fiche collectée.")
+            matrix_warn("Aucune fiche collectée.")
             sys.exit(0)
-        xlsx_path, csv_path = export_results(fiches, output_dir, ville)
-        print(f"\n── Export ──────────────────────────────────────")
-        print(f"  ✅ {xlsx_path}")
-        print(f"  ✅ {csv_path}")
-        print_synthese(ville, activite, fiches, all_city_stats[ville],
-                       xlsx_path, csv_path)
+
+        matrix_step("Export CSV...")
+        export_csv(fiches, csv_path)
+        matrix_ok(f"Fichier : {csv_path}")
+
+        st = all_city_stats[ville]
+        matrix_section(f"RÉSULTATS — Pages Jaunes — {ville}")
+        matrix_kv("Recherche", f'"{activite}"')
+        matrix_kv("Fiches collectées", str(st["fiches_brutes"]))
+        matrix_kv("Doublons supprimés", str(st["doublons"]))
+        matrix_kv("Fiches retenues", str(len(fiches)))
+        matrix_kv("Pages parcourues", str(st["pages_parcourues"]))
+        matrix_kv("Blocages CF détectés", str(st["blocages_cf"]))
+        matrix_separator()
+        matrix_kv("Fichier", os.path.basename(csv_path))
+
+    # ── Clôture Matrix ──
+    morpheus_says()
 
 
 if __name__ == "__main__":

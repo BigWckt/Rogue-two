@@ -7,22 +7,27 @@ recherche-entreprises.api.gouv.fr pour retrouver le SIRET à partir du nom
 et du code postal / ville.
 
 Usage :
-  python script_enrichissement.py --input pj_results_paris_20260402.xlsx
-  python script_enrichissement.py --input pj_results_paris_20260402.xlsx --resume
+  python script_enrichissement.py --input pj_results_multi_20260413.csv
+  python script_enrichissement.py --input pj_results_multi_20260413.csv --resume
 """
 
 import argparse
-import csv
 import os
 import re
 import sys
 import time
 from datetime import date
-from urllib.parse import quote
 
 import pandas as pd
 import requests
 from rapidfuzz import fuzz
+
+from matrix_display import (
+    GREEN, RED, BOLD, RESET,
+    matrix_banner, matrix_section, matrix_kv, matrix_separator,
+    matrix_step, matrix_ok, matrix_fail, matrix_warn,
+    morpheus_says, ask_filename,
+)
 
 # ── Config ────────────────────────────────────────────────────────────────────
 
@@ -40,6 +45,7 @@ ENRICHMENT_COLUMNS = [
     "Adresse",
     "Ville",
     "Code Postal",
+    "Ville de recherche",
     "Téléphone",
     "Site web",
     "Catégorie",
@@ -76,12 +82,12 @@ def http_get(url, params=None):
             )
             if resp.status_code == 429:
                 wait = int(resp.headers.get("Retry-After", 2 ** attempt))
-                print(f"  ⚠️  HTTP 429 — retry {attempt}/{MAX_RETRIES} dans {wait}s")
+                matrix_warn(f"HTTP 429 — retry {attempt}/{MAX_RETRIES} dans {wait}s")
                 time.sleep(wait)
                 continue
             if resp.status_code in (500, 502, 503, 504):
                 wait = 2 ** attempt
-                print(f"  ⚠️  HTTP {resp.status_code} — retry {attempt}/{MAX_RETRIES} dans {wait}s")
+                matrix_warn(f"HTTP {resp.status_code} — retry {attempt}/{MAX_RETRIES} dans {wait}s")
                 time.sleep(wait)
                 continue
             if resp.status_code == 400:
@@ -90,17 +96,17 @@ def http_get(url, params=None):
             return resp.json()
         except requests.exceptions.Timeout:
             wait = 2 ** attempt
-            print(f"  ⚠️  Timeout — retry {attempt}/{MAX_RETRIES} dans {wait}s")
+            matrix_warn(f"Timeout — retry {attempt}/{MAX_RETRIES} dans {wait}s")
             time.sleep(wait)
         except requests.exceptions.ConnectionError as e:
             wait = 2 ** attempt
-            print(f"  ⚠️  Connexion : {e} — retry {attempt}/{MAX_RETRIES}")
+            matrix_warn(f"Connexion : {e} — retry {attempt}/{MAX_RETRIES}")
             time.sleep(wait)
         except requests.exceptions.HTTPError as e:
-            print(f"  ❌ HTTP {e.response.status_code}")
+            matrix_fail(f"HTTP {e.response.status_code}")
             return None
         except ValueError:
-            print(f"  ❌ Réponse non-JSON")
+            matrix_fail("Réponse non-JSON")
             return None
     return None
 
@@ -108,7 +114,6 @@ def http_get(url, params=None):
 def clean_name(name: str) -> str:
     """Normalise un nom d'entreprise pour la comparaison."""
     name = name.upper().strip()
-    # Retirer les formes juridiques courantes
     for suffix in ["SARL", "SAS", "SA", "EURL", "SCI", "SASU", "EI"]:
         name = re.sub(rf"\b{suffix}\b", "", name)
     return re.sub(r"\s+", " ", name).strip()
@@ -160,7 +165,6 @@ def _best_match(candidates: list[dict], nom_original: str) -> dict | None:
 
 
 def _filter_by_cp(results: list[dict], code_postal: str) -> list[dict]:
-    """Filtre les résultats dont le code postal du siège correspond."""
     if not code_postal:
         return []
     return [
@@ -170,7 +174,6 @@ def _filter_by_cp(results: list[dict], code_postal: str) -> list[dict]:
 
 
 def _filter_by_commune(results: list[dict], ville: str) -> list[dict]:
-    """Filtre les résultats dont la commune du siège correspond (insensible casse)."""
     if not ville:
         return []
     ville_lower = ville.lower().strip()
@@ -182,17 +185,16 @@ def _filter_by_commune(results: list[dict], ville: str) -> list[dict]:
 
 def search_siret(nom: str, code_postal: str, ville: str) -> dict:
     """
-    1 seul appel API (q=NOM, per_page=10, minimal=true), puis filtrage local :
+    1 seul appel API (q=NOM, per_page=10, minimal=false), puis filtrage local :
       - Étape 1 : filtrer par code_postal exact
       - Étape 2 (si vide) : filtrer par commune
       - Étape 3 (si vide) : garder tous les résultats
-    Fallback : si 0 résultat, 2ᵉ appel avec nom nettoyé. Max 2 appels.
+    Fallback : si 0 résultat, 2e appel avec nom nettoyé. Max 2 appels.
     """
     nom_clean = clean_name(nom)
     if not nom_clean:
         return {"siret": "", "naf": "", "score": 0, "status": "Exclu — nom vide"}
 
-    # ── Appel 1 : nom brut ────────────────────────────────────────────────
     data = http_get(API_URL, params={
         "q": nom, "per_page": "10", "minimal": "false",
     })
@@ -201,7 +203,6 @@ def search_siret(nom: str, code_postal: str, ville: str) -> dict:
 
     results = data.get("results") or []
 
-    # ── Appel 2 (fallback) : nom nettoyé si 0 résultat ───────────────────
     if not results and nom != nom_clean:
         time.sleep(API_DELAY)
         data = http_get(API_URL, params={
@@ -214,14 +215,12 @@ def search_siret(nom: str, code_postal: str, ville: str) -> dict:
     if not results:
         return {"siret": "", "naf": "", "score": 0, "status": "Exclu — SIRET introuvable"}
 
-    # ── Filtrage local en cascade ─────────────────────────────────────────
     subset = _filter_by_cp(results, code_postal)
     if not subset:
         subset = _filter_by_commune(results, ville)
     if not subset:
         subset = results
 
-    # ── Meilleur match par similarité ─────────────────────────────────────
     match = _best_match(subset, nom)
     if match:
         return match
@@ -232,16 +231,14 @@ def search_siret(nom: str, code_postal: str, ville: str) -> dict:
 # ── Checkpoint / Resume ──────────────────────────────────────────────────────
 
 def save_checkpoint(rows: list[dict], filepath: str):
-    """Sauvegarde checkpoint CSV."""
     try:
         df = pd.DataFrame(rows, columns=ENRICHMENT_COLUMNS)
         df.to_csv(filepath, index=False, encoding="utf-8-sig")
     except Exception as e:
-        print(f"  ⚠️  Erreur checkpoint : {e}")
+        matrix_warn(f"Erreur checkpoint : {e}")
 
 
 def load_checkpoint(filepath: str) -> list[dict]:
-    """Charge un checkpoint CSV existant."""
     if not os.path.exists(filepath):
         return []
     try:
@@ -252,49 +249,13 @@ def load_checkpoint(filepath: str) -> list[dict]:
         return []
 
 
-# ── Export ────────────────────────────────────────────────────────────────────
+# ── Export CSV ───────────────────────────────────────────────────────────────
 
-def export_results(rows: list[dict], output_path: str):
-    """Exporte Excel avec onglet principal + onglet Exclus."""
-    found = [r for r in rows if r.get("Statut enrichissement") == "SIRET trouvé"]
-    excluded = [r for r in rows if r.get("Statut enrichissement", "").startswith("Exclu")]
-
-    with pd.ExcelWriter(output_path, engine="openpyxl") as writer:
-        df_found = pd.DataFrame(found, columns=ENRICHMENT_COLUMNS)
-        df_found["SIRET"] = df_found["SIRET"].astype(str)
-        df_found.to_excel(writer, sheet_name="Entreprises", index=False)
-
-        if excluded:
-            df_excl = pd.DataFrame(excluded, columns=ENRICHMENT_COLUMNS)
-            df_excl.to_excel(writer, sheet_name="Exclus", index=False)
-
-
-# ── Synthèse console ─────────────────────────────────────────────────────────
-
-def print_synthese(input_file: str, rows: list[dict], output_path: str,
-                   n_errors: int):
-    n_total = len(rows)
-    n_found = sum(1 for r in rows if r.get("Statut enrichissement") == "SIRET trouvé")
-    n_excluded = sum(1 for r in rows if r.get("Statut enrichissement", "").startswith("Exclu"))
-    pct = f"{n_found / n_total * 100:.0f}%" if n_total else "0%"
-
-    # Extraire ville du nom de fichier
-    ville = os.path.basename(input_file).replace("pj_results_", "").split("_")[0].title()
-
-    print()
-    print("══════════════════════════════════════════════════")
-    print(f"  ENRICHISSEMENT SIRET — {ville}")
-    print(f"  Fichier source : {os.path.basename(input_file)}")
-    print()
-    print(f"  Entreprises traitées     : {n_total}")
-    print(f"  SIRET trouvés            : {n_found} ({pct})")
-    print(f"  Exclus (< {SIMILARITY_THRESHOLD}% similarité): {n_excluded}")
-    print(f"  Erreurs API              : {n_errors}")
-    print("  ──────────────────────────────────────────────")
-    print(f"  Fichier enrichi : {os.path.basename(output_path)}")
-    print(f"  Onglet principal : {n_found} entreprises avec SIRET")
-    print(f"  Onglet Exclus : {n_excluded} entreprises")
-    print("══════════════════════════════════════════════════")
+def export_csv(rows: list[dict], csv_path: str):
+    """Exporte en CSV. SIRET en string."""
+    df = pd.DataFrame(rows, columns=ENRICHMENT_COLUMNS)
+    df["SIRET"] = df["SIRET"].astype(str)
+    df.to_csv(csv_path, index=False, encoding="utf-8-sig")
 
 
 # ── CLI ───────────────────────────────────────────────────────────────────────
@@ -303,9 +264,9 @@ def parse_args():
     parser = argparse.ArgumentParser(
         description="Enrichissement SIRET — recherche via API recherche-entreprises",
     )
-    parser.add_argument("--input", required=True, help="Fichier Excel PJ source")
-    parser.add_argument("--output", type=str, default=None,
-                        help="Répertoire de sortie (défaut: même dossier)")
+    parser.add_argument("--input", required=True, help="Fichier CSV PJ source")
+    parser.add_argument("--output", type=str, default=".",
+                        help="Répertoire de sortie (défaut: racine repo)")
     parser.add_argument("--resume", action="store_true",
                         help="Reprendre depuis le dernier checkpoint")
     return parser.parse_args()
@@ -318,31 +279,33 @@ def main():
     input_file = args.input
 
     if not os.path.exists(input_file):
-        print(f"❌ Fichier introuvable : {input_file}")
+        matrix_fail(f"Fichier introuvable : {input_file}")
         sys.exit(1)
 
-    # Déterminer le répertoire de sortie
-    output_dir = args.output or os.path.dirname(input_file) or "."
+    output_dir = args.output
     os.makedirs(output_dir, exist_ok=True)
 
-    # Noms de fichiers de sortie
-    base = os.path.splitext(os.path.basename(input_file))[0]
-    output_path = os.path.join(output_dir, f"{base}_enrichi.xlsx")
-    checkpoint_path = os.path.join(output_dir, f"{base}_checkpoint.csv")
-    csv_backup_path = os.path.join(output_dir, f"{base}_enrichi.csv")
+    # ── Bannière Matrix ──
+    matrix_banner("ENRICHISSEMENT SIRET")
 
-    # Charger le fichier source (onglet Consolidé si multi-villes, sinon sheet 0)
-    print(f"📂 Chargement de {input_file}…")
-    try:
-        df = pd.read_excel(input_file, sheet_name="Consolidé", dtype=str)
-        print("  (onglet Consolidé détecté)")
-    except (ValueError, KeyError):
-        df = pd.read_excel(input_file, dtype=str)
-    df = df.fillna("")
+    # ── Chargement du fichier source (CSV) ──
+    matrix_step(f"Chargement de {input_file}...")
+    df = pd.read_csv(input_file, encoding="utf-8-sig", dtype=str).fillna("")
     fiches = df.to_dict("records")
-    print(f"  {len(fiches)} entreprises chargées")
+    matrix_ok(f"{len(fiches)} entreprises chargées")
 
-    # Resume : charger le checkpoint
+    matrix_kv("Source", os.path.basename(input_file))
+    matrix_kv("Entreprises", str(len(fiches)))
+
+    # ── Nom de fichier interactif ──
+    base = os.path.splitext(os.path.basename(input_file))[0]
+    default_name = f"{base}_enrichi"
+    filename = ask_filename(default_name)
+
+    csv_path = os.path.join(output_dir, f"{filename}.csv")
+    checkpoint_path = os.path.join(output_dir, f"{base}_checkpoint.csv")
+
+    # Resume
     already_done: dict[str, dict] = {}
     if args.resume:
         checkpoint_rows = load_checkpoint(checkpoint_path)
@@ -350,17 +313,10 @@ def main():
             for r in checkpoint_rows:
                 key = (r.get("Nom de l'entreprise", "").lower(), r.get("Code Postal", ""))
                 already_done[key] = r
-            print(f"  ♻️  Reprise : {len(already_done)} entreprises déjà traitées")
+            matrix_ok(f"Reprise : {len(already_done)} entreprises déjà traitées")
 
-    print()
-    print("══════════════════════════════════════════════════")
-    print("  ENRICHISSEMENT SIRET")
-    print(f"  Source : {os.path.basename(input_file)}")
-    print(f"  Entreprises : {len(fiches)}")
-    print("══════════════════════════════════════════════════")
-    print()
-
-    # Enrichissement
+    # ── Enrichissement ──
+    matrix_section("Décryptage des identités SIRET")
     enriched_rows: list[dict] = []
     n_errors = 0
 
@@ -369,18 +325,16 @@ def main():
         cp = fiche.get("Code Postal", "")
         ville = fiche.get("Ville", "")
 
-        # Check si déjà fait (resume)
         key = (nom.lower(), cp)
         if key in already_done:
             enriched_rows.append(already_done[key])
             continue
 
-        print(f"  [{i}/{len(fiches)}] 🔍 {nom[:50]}…", end=" ", flush=True)
+        print(f"    {GREEN}[{i}/{len(fiches)}]{RESET} {nom[:50]}...", end=" ", flush=True)
 
         time.sleep(API_DELAY)
         result = search_siret(nom, cp, ville)
 
-        # Construire la ligne enrichie
         row = {**fiche}
         row["SIRET"] = result["siret"]
         row["Code NAF"] = result["naf"]
@@ -388,40 +342,47 @@ def main():
         row["Score similarité"] = str(result["score"]) if result["score"] else ""
 
         if result["status"] == "SIRET trouvé":
-            print(f"✅ {result['siret']} ({result['score']}%)")
+            print(f"{GREEN}✓{RESET} {result['siret']} ({result['score']}%)")
         elif result["status"].startswith("Exclu — erreur"):
-            print(f"⚠️  Erreur API")
+            print(f"{RED}! Erreur API{RESET}")
             n_errors += 1
         else:
-            print(f"❌ {result['status']}")
+            print(f"{RED}✗{RESET} {result['status']}")
 
         enriched_rows.append(row)
 
-        # Checkpoint
         if len(enriched_rows) % CHECKPOINT_EVERY == 0:
             save_checkpoint(enriched_rows, checkpoint_path)
-            print(f"  💾 Checkpoint ({len(enriched_rows)} entreprises)")
+            matrix_step(f"Checkpoint ({len(enriched_rows)} entreprises)")
 
     # Sauvegarde finale
     save_checkpoint(enriched_rows, checkpoint_path)
 
-    # Export Excel
-    print(f"\n── Export ──────────────────────────────────────")
-    export_results(enriched_rows, output_path)
-    print(f"  ✅ {output_path}")
-
-    # CSV backup
-    df_all = pd.DataFrame(enriched_rows, columns=ENRICHMENT_COLUMNS)
-    df_all["SIRET"] = df_all["SIRET"].astype(str)
-    df_all.to_csv(csv_backup_path, index=False, encoding="utf-8-sig")
-    print(f"  ✅ {csv_backup_path}")
+    # ── Export CSV ──
+    matrix_section("Export des données décryptées")
+    export_csv(enriched_rows, csv_path)
+    matrix_ok(f"Fichier : {csv_path}")
 
     # Cleanup checkpoint
     if os.path.exists(checkpoint_path):
         os.remove(checkpoint_path)
 
-    # Synthèse
-    print_synthese(input_file, enriched_rows, output_path, n_errors)
+    # ── Synthèse ──
+    n_total = len(enriched_rows)
+    n_found = sum(1 for r in enriched_rows if r.get("Statut enrichissement") == "SIRET trouvé")
+    n_excluded = sum(1 for r in enriched_rows if r.get("Statut enrichissement", "").startswith("Exclu"))
+    pct = f"{n_found / n_total * 100:.0f}%" if n_total else "0%"
+
+    matrix_section("RÉSULTATS — Identités extraites de la Matrice")
+    matrix_kv("Entreprises traitées", str(n_total))
+    matrix_kv("SIRET trouvés", f"{n_found} ({pct})")
+    matrix_kv(f"Exclus (< {SIMILARITY_THRESHOLD}% similarité)", str(n_excluded))
+    matrix_kv("Erreurs API", str(n_errors))
+    matrix_separator()
+    matrix_kv("Fichier enrichi", os.path.basename(csv_path))
+
+    # ── Clôture Matrix ──
+    morpheus_says()
 
 
 if __name__ == "__main__":

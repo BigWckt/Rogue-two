@@ -243,3 +243,52 @@ Stratégie v2 : **1 seul appel API** (`q=NOM, per_page=10`) + filtrage local en 
 - `pj_results_multi_20260409.xlsx` (29 Ko) — 168 fiches PJ
 - `pj_results_multi_20260409_enrichi.xlsx` (20 Ko) — 101 avec SIRET
 - `leads_qualifies_multi_20260409.xlsx` (24 Ko) — 134 leads qualifiés
+
+---
+
+## 2026-04-13 — Refactoring global : CSV only, Matrix theme, fix Chromium
+
+### 1. Format de sortie : CSV uniquement (4 scripts)
+- **Suppression complète du format XLSX** sur les 4 scripts
+- `script_lba_lbb.py` : supprimé `pd.ExcelWriter`, `.to_excel()`, export CSV seul via `export_csv()`
+- `script_pages_jaunes.py` : idem, supprimé l'export multi-onglets Excel
+- `script_enrichissement.py` : supprimé `export_results()` Excel (2 onglets Entreprises/Exclus), remplacé par CSV unique avec colonne `Statut enrichissement` pour distinguer trouvés/exclus
+- `script_comparaison.py` : supprimé `openpyxl` entièrement (imports, `style_sheet()`, `export_excel()`), remplacé par CSV unique avec colonne `Priorité` (Haute/Moyenne/Basse triées)
+- Lecture d'entrée : `script_enrichissement.py` et `script_comparaison.py` lisent désormais des CSV (`pd.read_csv`) au lieu d'Excel (`pd.read_excel`)
+- SIRET toujours en string (`df["SIRET"].astype(str)`) dans tous les exports CSV
+- Encodage : `utf-8-sig` (BOM) pour compatibilité Excel ouverture directe
+
+### 2. Sortie à la racine du repo par défaut (4 scripts)
+- `--output` CLI défaut changé à `.` (racine repo) pour tous les scripts
+- La clé `"output"` des fichiers JSON config (`params_lba.json`, `params_pj.json`) est désormais ignorée — seul `--output` CLI fait foi
+- Changement dans `load_config()` : `output_dir = args.output` au lieu de `cfg.get("output", ".")`
+
+### 3. Nom de fichier interactif (4 scripts)
+- Ajout de `ask_filename(default)` via `input()` avant toute exécution
+- L'utilisateur peut accepter le nom par défaut (Entrée) ou taper un nom personnalisé (sans extension `.csv`)
+- Noms par défaut : `lba_lbb_results_{ville}_{date}`, `pj_results_{ville}_{date}`, `{base}_enrichi`, `leads_qualifies_{ville}_{date}`
+
+### 4. Affichage thème Matrix (4 scripts)
+- Création de `matrix_display.py` : module partagé entre les 4 scripts
+  - `matrix_banner()` : ASCII art "WAKE UP, NEO..." + pluie de caractères Matrix
+  - `matrix_rain()` : effet pluie de caractères japonais katakana
+  - `matrix_step()` / `matrix_ok()` / `matrix_fail()` / `matrix_warn()` : messages `[+]` `[✓]` `[✗]` `[!]` colorés ANSI
+  - `matrix_kv()` : affichage clé/valeur avec bullet vert
+  - `matrix_section()` : titres de section façon Matrix
+  - `morpheus_says()` : citation aléatoire de Morpheus en clôture
+  - `ask_filename()` : prompt interactif encadré en vert
+- Couleurs : vert (`\033[92m`) pour succès/déco, rouge (`\033[91m`) pour erreurs, bold (`\033[1m`) pour les valeurs
+- Les compteurs réels (nombre d'entreprises, ville, taux, SIRET) restent lisibles en blanc/bold
+- Libellés adaptés au contexte de chaque script (« Connexion à la Matrice », « Infiltration Pages Jaunes », « Décryptage des identités SIRET », « Fusion des réalités »)
+
+### 5. Fix Chromium cross-platform (script_pages_jaunes.py)
+- `find_chromium()` retourne désormais `None` (plus de chemin Linux codé en dur)
+- Supprimé le bloc qui plantait avec `sys.exit(1)` si Chromium introuvable
+- Supprimé `executable_path` du `launch_kwargs` — Playwright détecte automatiquement le binaire Chromium sur tous les OS (Linux, Windows, Mac)
+- Supprimé l'import `glob` devenu inutile
+
+### État final
+**Les 4 scripts sont fonctionnels** ✅
+- Format : CSV uniquement (plus de dépendance openpyxl pour script_comparaison.py)
+- Affichage : thème Matrix cohérent sur les 4 scripts
+- Chromium : auto-détecté par Playwright (cross-platform)

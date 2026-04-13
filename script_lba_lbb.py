@@ -22,6 +22,13 @@ from datetime import date
 import pandas as pd
 import requests
 
+from matrix_display import (
+    GREEN, RED, BOLD, RESET,
+    matrix_banner, matrix_section, matrix_kv, matrix_separator,
+    matrix_step, matrix_ok, matrix_fail, matrix_warn,
+    morpheus_says, ask_filename,
+)
+
 # ── Table NAF → ROME ─────────────────────────────────────────────────────────
 
 NAF_TO_ROME = {
@@ -100,7 +107,7 @@ REQUEST_TIMEOUT = 30
 
 # ── Colonnes de sortie ───────────────────────────────────────────────────────
 
-EXCEL_COLUMNS = [
+OUTPUT_COLUMNS = [
     "Nom de l'entreprise", "SIRET", "Code NAF", "Adresse", "Ville",
     "Code Postal", "Ville de recherche", "Source", "Score LBB",
     "Offres actives", "Date de collecte",
@@ -127,30 +134,30 @@ def http_get(url, params=None, headers=None):
             )
             if resp.status_code in (429, 500, 502, 503, 504):
                 wait = 2 ** attempt
-                print(f"  ⚠️  HTTP {resp.status_code} — retry {attempt}/{MAX_RETRIES} dans {wait}s")
+                matrix_warn(f"HTTP {resp.status_code} — retry {attempt}/{MAX_RETRIES} dans {wait}s")
                 time.sleep(wait)
                 continue
             resp.raise_for_status()
             ct = resp.headers.get("content-type", "")
             if "html" in ct:
-                print(f"  ❌ Réponse HTML inattendue — {url}")
+                matrix_fail(f"Réponse HTML inattendue — {url}")
                 return None
             return resp.json()
         except requests.exceptions.Timeout:
             wait = 2 ** attempt
-            print(f"  ⚠️  Timeout — retry {attempt}/{MAX_RETRIES} dans {wait}s")
+            matrix_warn(f"Timeout — retry {attempt}/{MAX_RETRIES} dans {wait}s")
             time.sleep(wait)
         except requests.exceptions.ConnectionError as e:
             wait = 2 ** attempt
-            print(f"  ⚠️  Connexion : {e} — retry {attempt}/{MAX_RETRIES} dans {wait}s")
+            matrix_warn(f"Connexion : {e} — retry {attempt}/{MAX_RETRIES} dans {wait}s")
             time.sleep(wait)
         except requests.exceptions.HTTPError as e:
-            print(f"  ❌ HTTP {e.response.status_code} — {url}")
+            matrix_fail(f"HTTP {e.response.status_code} — {url}")
             return None
         except ValueError:
-            print(f"  ❌ Réponse non-JSON — {url}")
+            matrix_fail(f"Réponse non-JSON — {url}")
             return None
-    print(f"  ❌ Échec après {MAX_RETRIES} tentatives — {url}")
+    matrix_fail(f"Échec après {MAX_RETRIES} tentatives — {url}")
     return None
 
 
@@ -158,23 +165,23 @@ def http_get(url, params=None, headers=None):
 
 def geocode(ville: str) -> tuple[float, float]:
     """Retourne (latitude, longitude) pour la ville donnée."""
-    print(f"📡 Géocodage de « {ville} »…", end=" ", flush=True)
+    matrix_step(f"Géocodage de « {ville} »…")
     url = "https://api-adresse.data.gouv.fr/search/"
     data = http_get(url, params={"q": ville, "limit": 1, "type": "municipality"})
     if data and data.get("features"):
         coords = data["features"][0]["geometry"]["coordinates"]
         lon, lat = coords[0], coords[1]
-        print(f"✅ ({lat:.4f}, {lon:.4f})")
+        matrix_ok(f"Coordonnées : ({lat:.4f}, {lon:.4f})")
         return lat, lon
 
     # Fallback table locale
     key = ville.lower().strip()
     if key in VILLES_FALLBACK:
         lat, lon = VILLES_FALLBACK[key]
-        print(f"✅ fallback ({lat:.4f}, {lon:.4f})")
+        matrix_ok(f"Fallback local : ({lat:.4f}, {lon:.4f})")
         return lat, lon
 
-    print("❌ Ville introuvable")
+    matrix_fail("Ville introuvable")
     sys.exit(1)
 
 
@@ -187,7 +194,7 @@ def resolve_rome_codes(naf_codes: list[str]) -> list[str]:
         if naf in NAF_TO_ROME:
             rome_set.update(NAF_TO_ROME[naf])
         else:
-            print(f"  ⚠️  Code NAF « {naf} » inconnu — ignoré")
+            matrix_warn(f"Code NAF « {naf} » inconnu — ignoré")
     return sorted(rome_set)
 
 
@@ -209,11 +216,9 @@ def _parse_address_parts(full_address: str) -> tuple[str, str, str]:
 
 def _extract_lba_company(item: dict) -> dict | None:
     """Extrait les champs d'une entreprise depuis une offre LBA (jobs/matchas)."""
-    # Essaye les deux structures possibles
     wp = item.get("workplace") or {}
     company = item.get("company") or {}
     place = item.get("place") or {}
-    apply_info = item.get("apply") or {}
 
     siret = normalize_siret(
         wp.get("siret") or company.get("siret") or ""
@@ -228,7 +233,6 @@ def _extract_lba_company(item: dict) -> dict | None:
     naf_obj = (wp.get("domain") or {}).get("naf") or {}
     naf = naf_obj.get("code") or company.get("naf") or ""
 
-    # Adresse
     full_addr = (
         (wp.get("location") or {}).get("address")
         or place.get("fullAddress") or ""
@@ -289,9 +293,6 @@ def _extract_lbb_company(item: dict) -> dict | None:
 def fetch_search(rome_codes: list[str], lat: float, lon: float, radius: int) -> tuple[list[dict], list[dict]]:
     """
     Appelle /search pour chaque code ROME.
-    L'API retourne { jobs: [...], recruiters: [...] }.
-    - jobs = offres LBA actives
-    - recruiters = entreprises LBB (potentiel recrutement)
     Retourne (lba_rows, lbb_rows) brutes.
     """
     lba_rows = []
@@ -300,7 +301,7 @@ def fetch_search(rome_codes: list[str], lat: float, lon: float, radius: int) -> 
     headers = {"Authorization": f"Bearer {LBA_TOKEN}"}
 
     for rome in rome_codes:
-        print(f"  📡 /search ROME={rome}…", end=" ", flush=True)
+        matrix_step(f"Interrogation API /search ROME={rome}...")
         data = http_get(
             f"{LBA_BASE_URL}/search",
             params={
@@ -312,7 +313,7 @@ def fetch_search(rome_codes: list[str], lat: float, lon: float, radius: int) -> 
             headers=headers,
         )
         if data is None:
-            print("aucune donnée")
+            matrix_warn("Aucune donnée reçue")
             time.sleep(API_DELAY)
             continue
 
@@ -341,7 +342,7 @@ def fetch_search(rome_codes: list[str], lat: float, lon: float, radius: int) -> 
                 lbb_rows.append(row)
                 lbb_count += 1
 
-        print(f"✅ {lba_count} LBA + {lbb_count} LBB")
+        matrix_ok(f"Décodage : {lba_count} LBA + {lbb_count} LBB")
         time.sleep(API_DELAY)
 
     return lba_rows, lbb_rows
@@ -363,7 +364,6 @@ def deduplicate(lba_rows: list[dict], lbb_rows: list[dict]) -> tuple[list[dict],
         if not siret:
             continue
         if siret in by_siret:
-            # Même source, on cumule les offres
             existing = by_siret[siret]
             existing["Offres actives"] = (
                 (existing.get("Offres actives") or 0) + (row.get("Offres actives") or 0)
@@ -377,14 +377,12 @@ def deduplicate(lba_rows: list[dict], lbb_rows: list[dict]) -> tuple[list[dict],
         if not siret:
             continue
         if siret in by_siret:
-            # Doublon LBA+LBB
             existing = by_siret[siret]
             if existing["Source"] == "LBA":
                 existing["Source"] = "LBA + LBB"
                 existing["Score LBB"] = row.get("Score LBB") or existing.get("Score LBB", "")
                 doublons += 1
-            # Combler les champs vides
-            for col in EXCEL_COLUMNS:
+            for col in OUTPUT_COLUMNS:
                 if not str(existing.get(col, "")).strip() and str(row.get(col, "")).strip():
                     existing[col] = row[col]
         else:
@@ -393,53 +391,19 @@ def deduplicate(lba_rows: list[dict], lbb_rows: list[dict]) -> tuple[list[dict],
     return list(by_siret.values()), doublons
 
 
-# ── Export ────────────────────────────────────────────────────────────────────
+# ── Export CSV ───────────────────────────────────────────────────────────────
 
 def save_backup_csv(rows: list[dict], filepath: str):
     """Sauvegarde intermédiaire CSV."""
-    df = pd.DataFrame(rows, columns=EXCEL_COLUMNS)
+    df = pd.DataFrame(rows, columns=OUTPUT_COLUMNS)
     df.to_csv(filepath, index=False, encoding="utf-8-sig")
 
 
-def export_results(rows: list[dict], output_dir: str, ville: str):
-    """Exporte Excel + CSV backup."""
-    today_str = date.today().strftime("%Y%m%d")
-    ville_slug = ville.lower().replace(" ", "_").replace("-", "_")
-    base_name = f"lba_lbb_results_{ville_slug}_{today_str}"
-    xlsx_path = os.path.join(output_dir, f"{base_name}.xlsx")
-    csv_path = os.path.join(output_dir, f"{base_name}.csv")
-
-    df = pd.DataFrame(rows, columns=EXCEL_COLUMNS)
-    # SIRET en string
+def export_csv(rows: list[dict], csv_path: str):
+    """Exporte en CSV uniquement. SIRET en string."""
+    df = pd.DataFrame(rows, columns=OUTPUT_COLUMNS)
     df["SIRET"] = df["SIRET"].astype(str)
-
-    df.to_excel(xlsx_path, index=False, engine="openpyxl")
     df.to_csv(csv_path, index=False, encoding="utf-8-sig")
-
-    return xlsx_path, csv_path
-
-
-# ── Synthèse console ─────────────────────────────────────────────────────────
-
-def print_synthese(ville: str, rayon: int, naf_codes: list[str],
-                   rome_codes: list[str], rows: list[dict],
-                   n_lba: int, n_lbb: int, n_doublons: int,
-                   xlsx_path: str, csv_path: str):
-    n_total = len(rows)
-    print()
-    print("══════════════════════════════════════════════════")
-    print(f"  RÉSULTATS — {ville} (rayon {rayon} km)")
-    print(f"  Codes NAF : {', '.join(naf_codes)} → ROME : {', '.join(rome_codes)}")
-    print()
-    print(f"  LBA (offres actives)     : {n_lba} entreprises")
-    print(f"  LBB (potentiel)          : {n_lbb} entreprises")
-    print(f"  Doublons LBA+LBB         : {n_doublons} entreprises")
-    print("  ──────────────────────────────────────────────")
-    print(f"  Total unique (par SIRET) : {n_total} entreprises")
-    print()
-    print(f"  📁 Fichier : {os.path.basename(xlsx_path)}")
-    print(f"  📁 Backup  : {os.path.basename(csv_path)}")
-    print("══════════════════════════════════════════════════")
 
 
 # ── CLI ───────────────────────────────────────────────────────────────────────
@@ -451,7 +415,7 @@ def parse_args():
     parser.add_argument("--ville", type=str, help="Nom de la ville")
     parser.add_argument("--naf", nargs="+", help="Codes NAF (ex: 10.71A 10.71B)")
     parser.add_argument("--rayon", type=int, default=30, help="Rayon en km (défaut: 30)")
-    parser.add_argument("--output", type=str, default=".", help="Répertoire de sortie")
+    parser.add_argument("--output", type=str, default=".", help="Répertoire de sortie (défaut: racine repo)")
     parser.add_argument("--config", type=str, help="Fichier JSON de paramètres")
     return parser.parse_args()
 
@@ -461,24 +425,23 @@ def load_config(args) -> tuple[list[str], list[str], int, str]:
     if args.config:
         with open(args.config, encoding="utf-8") as f:
             cfg = json.load(f)
-        # Support "ville" (string) ou "villes" (array)
         if "villes" in cfg:
             villes = cfg["villes"]
         elif "ville" in cfg:
             villes = [cfg["ville"]]
         else:
-            print("❌ Clé 'ville' ou 'villes' manquante dans le JSON")
+            matrix_fail("Clé 'ville' ou 'villes' manquante dans le JSON")
             sys.exit(1)
         naf_codes = cfg["codes_naf"]
         rayon = cfg.get("rayon_km", 30)
-        output_dir = cfg.get("output", ".")
+        output_dir = args.output  # toujours CLI, jamais le JSON
     elif args.ville and args.naf:
         villes = [args.ville]
         naf_codes = args.naf
         rayon = args.rayon
         output_dir = args.output
     else:
-        print("❌ Spécifiez --ville et --naf, ou --config")
+        matrix_fail("Spécifiez --ville et --naf, ou --config")
         sys.exit(1)
 
     os.makedirs(output_dir, exist_ok=True)
@@ -492,40 +455,47 @@ def main():
     villes, naf_codes, rayon, output_dir = load_config(args)
     multi = len(villes) > 1
 
-    print("══════════════════════════════════════════════════")
-    print("  PROSPECTION LBA + LBB")
-    print(f"  Villes : {', '.join(villes)}")
-    print(f"  NAF    : {', '.join(naf_codes)}")
-    print(f"  Rayon  : {rayon} km")
-    print("══════════════════════════════════════════════════")
+    # ── Bannière Matrix ──
+    matrix_banner("PROSPECTION LBA + LBB")
 
-    # 1. Résolution NAF → ROME
+    matrix_kv("Villes", ", ".join(villes))
+    matrix_kv("Codes NAF", ", ".join(naf_codes))
+    matrix_kv("Rayon", f"{rayon} km")
+
+    # ── Nom de fichier interactif ──
+    today_str = date.today().strftime("%Y%m%d")
+    if multi:
+        default_name = f"lba_lbb_results_multi_{today_str}"
+    else:
+        ville_slug = villes[0].lower().replace(" ", "_").replace("-", "_")
+        default_name = f"lba_lbb_results_{ville_slug}_{today_str}"
+    filename = ask_filename(default_name)
+
+    # ── Résolution NAF → ROME ──
+    matrix_section("Décodage NAF → ROME")
     rome_codes = resolve_rome_codes(naf_codes)
     if not rome_codes:
-        print("❌ Aucun code ROME trouvé pour les NAF fournis")
+        matrix_fail("Aucun code ROME trouvé pour les NAF fournis")
         sys.exit(1)
-    print(f"\n✅ Codes ROME : {', '.join(rome_codes)}")
+    matrix_ok(f"Codes ROME : {', '.join(rome_codes)}")
 
-    # 2. Boucle sur les villes
+    # ── Boucle sur les villes ──
     all_city_results: dict[str, list[dict]] = {}
     city_stats: dict[str, dict] = {}
-    today_str = date.today().strftime("%Y%m%d")
 
     for ville in villes:
-        print(f"\n{'═' * 50}")
-        print(f"  📍 {ville}")
-        print(f"{'═' * 50}")
+        matrix_section(f"Connexion à la Matrice — {ville}")
 
         try:
             lat, lon = geocode(ville)
 
             effective_radius = rayon
-            print(f"\n── Collecte via /search (rayon {effective_radius} km) ──")
+            matrix_step(f"Collecte via /search (rayon {effective_radius} km)...")
             lba_rows, lbb_rows = fetch_search(rome_codes, lat, lon, effective_radius)
 
             # Rayon 0 : si aucun résultat, retry avec 1 km
             if effective_radius == 0 and not lba_rows and not lbb_rows:
-                print("  ⚠️  Rayon 0 km : aucun résultat — retry avec 1 km")
+                matrix_warn("Rayon 0 km : aucun résultat — retry avec 1 km")
                 lba_rows, lbb_rows = fetch_search(rome_codes, lat, lon, 1)
 
             # Ajouter "Ville de recherche"
@@ -544,6 +514,7 @@ def main():
             lbb_sirets = {r["SIRET"] for r in lbb_rows if r.get("SIRET")}
 
             # Déduplication intra-ville
+            matrix_step("Déduplication par SIRET...")
             rows, n_doublons = deduplicate(lba_rows, lbb_rows)
             for row in rows:
                 row.setdefault("Ville de recherche", ville)
@@ -555,30 +526,29 @@ def main():
                 "n_unique": len(rows),
             }
             all_city_results[ville] = rows
-            print(f"  ✅ {len(rows)} entreprises uniques pour {ville}")
+            matrix_ok(f"{len(rows)} entreprises uniques pour {ville}")
 
             # Nettoyage backup
             if os.path.exists(backup_path):
                 os.remove(backup_path)
 
         except Exception as e:
-            print(f"  ❌ Erreur pour {ville} : {e}")
+            matrix_fail(f"Erreur pour {ville} : {e}")
             all_city_results[ville] = []
             city_stats[ville] = {
                 "n_lba": 0, "n_lbb": 0, "n_doublons": 0, "n_unique": 0,
             }
             continue
 
-    # 3. Vérification globale
+    # ── Vérification globale ──
     if not any(all_city_results.values()):
-        print("\n⚠️  Aucune entreprise collectée pour aucune ville.")
+        matrix_warn("Aucune entreprise collectée pour aucune ville.")
         sys.exit(0)
 
-    # 4. Export
-    if multi:
-        xlsx_path = os.path.join(output_dir, f"lba_lbb_results_multi_{today_str}.xlsx")
-        csv_path = xlsx_path.replace(".xlsx", ".csv")
+    # ── Export CSV ──
+    csv_path = os.path.join(output_dir, f"{filename}.csv")
 
+    if multi:
         # Consolidé : dédup globale par SIRET
         all_rows = []
         for rows in all_city_results.values():
@@ -593,48 +563,43 @@ def main():
                 seen_sirets.add(siret)
             consolidated.append(row)
 
-        columns = EXCEL_COLUMNS
-        with pd.ExcelWriter(xlsx_path, engine="openpyxl") as writer:
-            for ville, rows in all_city_results.items():
-                if rows:
-                    df = pd.DataFrame(rows, columns=columns)
-                    df["SIRET"] = df["SIRET"].astype(str)
-                    df.to_excel(writer, sheet_name=ville[:31], index=False)
-            df_all = pd.DataFrame(consolidated, columns=columns)
-            df_all["SIRET"] = df_all["SIRET"].astype(str)
-            df_all.to_excel(writer, sheet_name="Consolidé", index=False)
+        matrix_step("Export CSV consolidé...")
+        export_csv(consolidated, csv_path)
+        matrix_ok(f"Fichier : {csv_path}")
 
-        df_all.to_csv(csv_path, index=False, encoding="utf-8-sig")
-
-        print(f"\n── Export multi-villes ──────────────────────────")
-        print(f"  ✅ {xlsx_path}")
-        print(f"  ✅ {csv_path}")
-        print()
-        print("══════════════════════════════════════════════════")
-        print("  RÉSULTATS MULTI-VILLES — LBA + LBB")
-        print(f"  NAF : {', '.join(naf_codes)} → ROME : {', '.join(rome_codes)}")
+        # ── Synthèse ──
+        matrix_section("RÉSULTATS — Données extraites de la Matrice")
+        matrix_kv("NAF", f"{', '.join(naf_codes)} → ROME : {', '.join(rome_codes)}")
         print()
         for ville, st in city_stats.items():
-            print(f"  📍 {ville}: {st['n_unique']} uniques "
+            print(f"    {GREEN}▸{RESET} {ville}: {BOLD}{st['n_unique']}{RESET} uniques "
                   f"({st['n_lba']} LBA, {st['n_lbb']} LBB, {st['n_doublons']} doublons)")
-        print("  ──────────────────────────────────────────────")
-        print(f"  Total consolidé (dédup SIRET) : {len(consolidated)} entreprises")
-        print(f"  📁 Fichier : {os.path.basename(xlsx_path)}")
-        print("══════════════════════════════════════════════════")
+        matrix_separator()
+        matrix_kv("Total consolidé (dédup SIRET)", f"{len(consolidated)} entreprises")
+        matrix_kv("Fichier", os.path.basename(csv_path))
     else:
-        # Mode mono-ville (rétrocompatible)
         ville = villes[0]
         rows = all_city_results.get(ville, [])
         if not rows:
-            print("\n⚠️  Aucune entreprise collectée.")
+            matrix_warn("Aucune entreprise collectée.")
             sys.exit(0)
-        xlsx_path, csv_path = export_results(rows, output_dir, ville)
+
+        matrix_step("Export CSV...")
+        export_csv(rows, csv_path)
+        matrix_ok(f"Fichier : {csv_path}")
+
         st = city_stats[ville]
-        print_synthese(
-            ville, rayon, naf_codes, rome_codes, rows,
-            st["n_lba"], st["n_lbb"], st["n_doublons"],
-            xlsx_path, csv_path,
-        )
+        matrix_section(f"RÉSULTATS — {ville} (rayon {rayon} km)")
+        matrix_kv("Codes NAF → ROME", f"{', '.join(naf_codes)} → {', '.join(rome_codes)}")
+        matrix_kv("LBA (offres actives)", f"{st['n_lba']} entreprises")
+        matrix_kv("LBB (potentiel)", f"{st['n_lbb']} entreprises")
+        matrix_kv("Doublons LBA+LBB", f"{st['n_doublons']} entreprises")
+        matrix_separator()
+        matrix_kv("Total unique (par SIRET)", f"{len(rows)} entreprises")
+        matrix_kv("Fichier", os.path.basename(csv_path))
+
+    # ── Clôture Matrix ──
+    morpheus_says()
 
 
 if __name__ == "__main__":

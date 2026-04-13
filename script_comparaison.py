@@ -4,12 +4,11 @@ script_comparaison.py — Croisement PJ enrichi x LBA/LBB
 ========================================================
 Croise les résultats Pages Jaunes enrichis (avec SIRET) et les résultats
 LBA/LBB sur la base du SIRET, attribue un niveau de priorité (Haute /
-Moyenne / Basse), et produit le fichier Excel final multi-onglets prêt
-pour import HubSpot.
+Moyenne / Basse), et produit le fichier CSV final prêt pour import HubSpot.
 
 Usage :
-  python script_comparaison.py --pj pj_enrichi.xlsx --lba lba_lbb.xlsx
-  python script_comparaison.py --lba lba_lbb.xlsx  # sans PJ
+  python script_comparaison.py --pj pj_enrichi.csv --lba lba_lbb.csv
+  python script_comparaison.py --lba lba_lbb.csv  # sans PJ
 """
 
 import argparse
@@ -18,9 +17,13 @@ import sys
 from datetime import date
 
 import pandas as pd
-from openpyxl import load_workbook
-from openpyxl.styles import Font, PatternFill, Alignment
-from openpyxl.utils import get_column_letter
+
+from matrix_display import (
+    GREEN, RED, BOLD, RESET,
+    matrix_banner, matrix_section, matrix_kv, matrix_separator,
+    matrix_step, matrix_ok, matrix_fail, matrix_warn,
+    morpheus_says, ask_filename,
+)
 
 # ── Colonnes de sortie (noms HubSpot) ────────────────────────────────────────
 
@@ -40,11 +43,6 @@ OUTPUT_COLUMNS = [
     "Date de collecte",
 ]
 
-# ── Charte Skill & You ──────────────────────────────────────────────────────
-
-HEADER_BG = "1558EE"
-HEADER_FG = "FFFFFF"
-
 PRIORITY_ORDER = {"Haute": 0, "Moyenne": 1, "Basse": 2}
 
 
@@ -60,11 +58,8 @@ def normalize_siret(raw) -> str:
 
 
 def load_lba_lbb(filepath: str) -> dict[str, dict]:
-    """Charge le fichier LBA/LBB et retourne un dict SIRET → row."""
-    try:
-        df = pd.read_excel(filepath, sheet_name="Consolidé", dtype=str).fillna("")
-    except (ValueError, KeyError):
-        df = pd.read_excel(filepath, dtype=str).fillna("")
+    """Charge le fichier CSV LBA/LBB et retourne un dict SIRET -> row."""
+    df = pd.read_csv(filepath, encoding="utf-8-sig", dtype=str).fillna("")
     by_siret: dict[str, dict] = {}
     for _, row in df.iterrows():
         siret = normalize_siret(row.get("SIRET", ""))
@@ -72,7 +67,6 @@ def load_lba_lbb(filepath: str) -> dict[str, dict]:
             continue
         rec = row.to_dict()
         rec["SIRET"] = siret
-        # Si doublon SIRET, garder celui avec source LBA (prioritaire)
         if siret in by_siret:
             existing_src = by_siret[siret].get("Source", "")
             if "LBA" not in existing_src and "LBA" in rec.get("Source", ""):
@@ -83,11 +77,8 @@ def load_lba_lbb(filepath: str) -> dict[str, dict]:
 
 
 def load_pj_enrichi(filepath: str) -> dict[str, dict]:
-    """Charge le fichier PJ enrichi (onglet Entreprises) et retourne un dict SIRET → row."""
-    try:
-        df = pd.read_excel(filepath, sheet_name="Entreprises", dtype=str).fillna("")
-    except (ValueError, KeyError):
-        df = pd.read_excel(filepath, sheet_name=0, dtype=str).fillna("")
+    """Charge le fichier CSV PJ enrichi et retourne un dict SIRET -> row."""
+    df = pd.read_csv(filepath, encoding="utf-8-sig", dtype=str).fillna("")
     by_siret: dict[str, dict] = {}
     for _, row in df.iterrows():
         siret = normalize_siret(row.get("SIRET", ""))
@@ -130,7 +121,6 @@ def merge_and_score(pj_data: dict[str, dict],
         lead["Date de collecte"] = today
 
         if pj and lba:
-            # Match : fusionner — PJ pour nom/adresse/tel, LBA/LBB pour score/offres
             stats["matches"] += 1
             lead["Nom de l'entreprise"] = pj.get("Nom de l'entreprise") or lba.get("Nom de l'entreprise", "")
             lead["Code NAF"] = pj.get("Code NAF") or lba.get("Code NAF", "")
@@ -151,7 +141,6 @@ def merge_and_score(pj_data: dict[str, dict],
                 lead["Source"] = "PJ + LBB"
 
         elif lba:
-            # Uniquement LBA/LBB — pas de correspondance PJ
             lead["Nom de l'entreprise"] = lba.get("Nom de l'entreprise", "")
             lead["Code NAF"] = lba.get("Code NAF", "")
             lead["Adresse"] = lba.get("Adresse", "")
@@ -169,7 +158,6 @@ def merge_and_score(pj_data: dict[str, dict],
                 lead["Source"] = lba_source
 
         elif pj:
-            # Uniquement PJ — aucun signal recrutement
             lead["Nom de l'entreprise"] = pj.get("Nom de l'entreprise", "")
             lead["Code NAF"] = pj.get("Code NAF", "")
             lead["Adresse"] = pj.get("Adresse", "")
@@ -180,7 +168,6 @@ def merge_and_score(pj_data: dict[str, dict],
             lead["Priorité"] = "Basse"
             lead["Source"] = "Pages Jaunes"
 
-        # Compteurs
         if lead["Priorité"] == "Haute":
             stats["haute"] += 1
         elif lead["Priorité"] == "Moyenne":
@@ -190,110 +177,33 @@ def merge_and_score(pj_data: dict[str, dict],
 
         leads.append(lead)
 
-    # Tri : Haute → Moyenne → Basse
+    # Tri : Haute -> Moyenne -> Basse
     leads.sort(key=lambda r: PRIORITY_ORDER.get(r.get("Priorité", ""), 9))
 
     return leads, stats
 
 
-# ── Export Excel ──────────────────────────────────────────────────────────────
+# ── Export CSV ───────────────────────────────────────────────────────────────
 
-def style_sheet(ws):
-    """Applique la mise en forme Skill & You à un onglet."""
-    hdr_fill = PatternFill("solid", fgColor=HEADER_BG)
-    hdr_font = Font(bold=True, color=HEADER_FG)
-
-    for cell in ws[1]:
-        cell.fill = hdr_fill
-        cell.font = hdr_font
-        cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
-
-    # Auto-dimensionner les colonnes
-    for col_idx in range(1, ws.max_column + 1):
-        max_len = len(str(ws.cell(1, col_idx).value or ""))
-        for row_idx in range(2, min(ws.max_row + 1, 50)):  # sample 50 rows
-            val = str(ws.cell(row_idx, col_idx).value or "")
-            if len(val) > max_len:
-                max_len = len(val)
-        ws.column_dimensions[get_column_letter(col_idx)].width = min(max_len + 4, 45)
-
-    # SIRET en texte
-    siret_col = None
-    for col_idx in range(1, ws.max_column + 1):
-        if ws.cell(1, col_idx).value == "SIRET":
-            siret_col = col_idx
-            break
-    if siret_col:
-        for row_idx in range(2, ws.max_row + 1):
-            ws.cell(row_idx, siret_col).number_format = "@"
-
-    ws.row_dimensions[1].height = 30
-    ws.freeze_panes = "A2"
-
-
-def export_excel(leads: list[dict], output_path: str):
-    """Exporte le fichier Excel multi-onglets."""
-    haute = [r for r in leads if r["Priorité"] == "Haute"]
-    moyenne = [r for r in leads if r["Priorité"] == "Moyenne"]
-    basse = [r for r in leads if r["Priorité"] == "Basse"]
-
-    sheets = {
-        "Priorité Haute": haute,
-        "Priorité Moyenne": moyenne,
-        "Priorité Basse": basse,
-        "Tous les leads": leads,
-    }
-
-    with pd.ExcelWriter(output_path, engine="openpyxl") as writer:
-        for sheet_name, rows in sheets.items():
-            df = pd.DataFrame(rows, columns=OUTPUT_COLUMNS)
-            df["SIRET"] = df["SIRET"].astype(str)
-            df.to_excel(writer, sheet_name=sheet_name, index=False)
-
-    # Styling
-    wb = load_workbook(output_path)
-    for sheet_name in wb.sheetnames:
-        style_sheet(wb[sheet_name])
-    wb.save(output_path)
-
-
-# ── Synthèse console ─────────────────────────────────────────────────────────
-
-def print_synthese(ville: str, leads: list[dict], stats: dict,
-                   output_path: str):
-    n_total = len(leads)
-    print()
-    print("══════════════════════════════════════════════════")
-    print(f"  CROISEMENT — {ville}")
-    if stats["pj_count"]:
-        print(f"  PJ enrichi  : {stats['pj_count']} entreprises (avec SIRET)")
-    print(f"  LBA/LBB     : {stats['lba_count']} entreprises")
-    print()
-    if stats["pj_count"]:
-        print(f"  Correspondances PJ ↔ LBA/LBB (même SIRET) : {stats['matches']}")
-    print("  ──────────────────────────────────────────────")
-    print(f"  🔴 Priorité Haute   : {stats['haute']} entreprises")
-    print(f"  🟡 Priorité Moyenne : {stats['moyenne']} entreprises")
-    print(f"  🟢 Priorité Basse   : {stats['basse']} entreprises")
-    print("  ──────────────────────────────────────────────")
-    print(f"  Total leads qualifiés : {n_total} entreprises")
-    print()
-    print(f"  📁 Fichier : {os.path.basename(output_path)}")
-    print("══════════════════════════════════════════════════")
+def export_csv(leads: list[dict], csv_path: str):
+    """Exporte un CSV unique avec colonne Priorité. SIRET en string."""
+    df = pd.DataFrame(leads, columns=OUTPUT_COLUMNS)
+    df["SIRET"] = df["SIRET"].astype(str)
+    df.to_csv(csv_path, index=False, encoding="utf-8-sig")
 
 
 # ── CLI ───────────────────────────────────────────────────────────────────────
 
 def parse_args():
     parser = argparse.ArgumentParser(
-        description="Croisement PJ enrichi × LBA/LBB — scoring et export HubSpot",
+        description="Croisement PJ enrichi x LBA/LBB — scoring et export HubSpot",
     )
     parser.add_argument("--pj", type=str, default=None,
-                        help="Fichier PJ enrichi (.xlsx)")
+                        help="Fichier PJ enrichi (.csv)")
     parser.add_argument("--lba", type=str, default=None,
-                        help="Fichier LBA/LBB (.xlsx)")
+                        help="Fichier LBA/LBB (.csv)")
     parser.add_argument("--output", type=str, default=".",
-                        help="Répertoire de sortie")
+                        help="Répertoire de sortie (défaut: racine repo)")
     return parser.parse_args()
 
 
@@ -303,10 +213,13 @@ def main():
     args = parse_args()
 
     if not args.pj and not args.lba:
-        print("❌ Spécifiez au moins --pj ou --lba")
+        matrix_fail("Spécifiez au moins --pj ou --lba")
         sys.exit(1)
 
     os.makedirs(args.output, exist_ok=True)
+
+    # ── Bannière Matrix ──
+    matrix_banner("CROISEMENT FINAL — LEADS QUALIFIÉS")
 
     # Charger les données
     pj_data: dict[str, dict] = {}
@@ -314,55 +227,71 @@ def main():
 
     if args.pj:
         if not os.path.exists(args.pj):
-            print(f"⚠️  Fichier PJ introuvable : {args.pj} — continué sans PJ")
+            matrix_warn(f"Fichier PJ introuvable : {args.pj} — continué sans PJ")
         else:
-            print(f"📂 PJ enrichi : {args.pj}")
+            matrix_step(f"Chargement PJ enrichi : {args.pj}")
             pj_data = load_pj_enrichi(args.pj)
-            print(f"  {len(pj_data)} entreprises avec SIRET")
+            matrix_ok(f"{len(pj_data)} entreprises avec SIRET")
 
     if args.lba:
         if not os.path.exists(args.lba):
-            print(f"⚠️  Fichier LBA/LBB introuvable : {args.lba} — continué sans LBA/LBB")
+            matrix_warn(f"Fichier LBA/LBB introuvable : {args.lba} — continué sans LBA/LBB")
         else:
-            print(f"📂 LBA/LBB    : {args.lba}")
+            matrix_step(f"Chargement LBA/LBB : {args.lba}")
             lba_data = load_lba_lbb(args.lba)
-            print(f"  {len(lba_data)} entreprises avec SIRET")
+            matrix_ok(f"{len(lba_data)} entreprises avec SIRET")
 
     if not pj_data and not lba_data:
-        print("❌ Aucune donnée chargée")
+        matrix_fail("Aucune donnée chargée")
         sys.exit(1)
 
+    # ── Nom de fichier interactif ──
+    today_str = date.today().strftime("%Y%m%d")
     # Déduire la ville depuis le nom de fichier
-    ville = "Inconnu"
+    ville = "multi"
     ref_file = args.lba or args.pj or ""
     base = os.path.basename(ref_file).lower()
     for prefix in ["lba_lbb_results_", "pj_results_"]:
         if prefix in base:
             parts = base.replace(prefix, "").split("_")
             if parts:
-                ville = parts[0].title()
+                ville = parts[0]
                 break
 
-    print(f"\n── Croisement par SIRET ─────────────────────────")
+    default_name = f"leads_qualifies_{ville}_{today_str}"
+    filename = ask_filename(default_name)
 
-    # Croisement
+    # ── Croisement ──
+    matrix_section("Croisement par SIRET — fusion des réalités")
     leads, stats = merge_and_score(pj_data, lba_data)
 
     if not leads:
-        print("⚠️  Aucun lead généré")
+        matrix_warn("Aucun lead généré")
         sys.exit(0)
 
-    # Export
-    today_str = date.today().strftime("%Y%m%d")
-    ville_slug = ville.lower().replace(" ", "_").replace("-", "_")
-    output_path = os.path.join(args.output, f"leads_qualifies_{ville_slug}_{today_str}.xlsx")
+    # ── Export CSV ──
+    csv_path = os.path.join(args.output, f"{filename}.csv")
+    matrix_step("Export CSV final...")
+    export_csv(leads, csv_path)
+    matrix_ok(f"Fichier : {csv_path}")
 
-    print(f"\n── Export ──────────────────────────────────────")
-    export_excel(leads, output_path)
-    print(f"  ✅ {output_path}")
+    # ── Synthèse ──
+    matrix_section("RÉSULTATS — La Matrice a livré ses secrets")
+    if stats["pj_count"]:
+        matrix_kv("PJ enrichi", f"{stats['pj_count']} entreprises (avec SIRET)")
+    matrix_kv("LBA/LBB", f"{stats['lba_count']} entreprises")
+    if stats["pj_count"]:
+        matrix_kv("Correspondances PJ <> LBA/LBB", f"{stats['matches']}")
+    matrix_separator()
+    matrix_kv("Priorité Haute (LBA)", f"{stats['haute']} entreprises")
+    matrix_kv("Priorité Moyenne (LBB)", f"{stats['moyenne']} entreprises")
+    matrix_kv("Priorité Basse (PJ seul)", f"{stats['basse']} entreprises")
+    matrix_separator()
+    matrix_kv("Total leads qualifiés", f"{len(leads)} entreprises")
+    matrix_kv("Fichier", os.path.basename(csv_path))
 
-    # Synthèse
-    print_synthese(ville, leads, stats, output_path)
+    # ── Clôture Matrix ──
+    morpheus_says()
 
 
 if __name__ == "__main__":
