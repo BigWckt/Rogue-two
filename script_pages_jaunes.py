@@ -23,6 +23,7 @@ import random
 import re
 import sys
 import time
+import unicodedata
 from datetime import date
 from urllib.parse import quote, urlparse
 
@@ -63,6 +64,28 @@ OUTPUT_COLUMNS = [
     "Date de collecte",
 ]
 
+# ── Exclusions automatiques ──────────────────────────────────────────────────
+# Mots-clés d'exclusion par catégorie (insensible casse + accents).
+# Étendre cette constante pour ajouter de nouvelles exclusions.
+
+EXCLUSIONS_PJ = {
+    "Pharmacies": [
+        "pharmacie", "pharmacien", "parapharmacie",
+    ],
+    "Centres d'hébergement": [
+        "centre d'hebergement", "centre d hebergement", "hebergement d'urgence",
+        "chrs", "cada", "huda", "centre d'accueil",
+    ],
+    "Foyers jeunes": [
+        "foyer de jeunes", "foyer jeunes travailleurs", "fjt",
+        "foyer pour jeunes", "foyer d'accueil",
+    ],
+    "Centres de planification": [
+        "centre de planification", "planification familiale", "cpef",
+        "planning familial",
+    ],
+}
+
 # ── Config ────────────────────────────────────────────────────────────────────
 
 PJ_BASE_URL = "https://www.pagesjaunes.fr"
@@ -93,6 +116,36 @@ def validate_phone(raw: str) -> str:
     if digits and re.match(r"^0[1-9]\d{8}$", digits):
         return digits
     return ""
+
+
+def strip_accents(s: str) -> str:
+    """Supprime les accents d'une chaîne (é→e, è→e, etc.)."""
+    return unicodedata.normalize("NFKD", s).encode("ASCII", "ignore").decode()
+
+
+def apply_exclusions(fiches: list[dict]) -> tuple[list[dict], dict[str, int]]:
+    """
+    Filtre les fiches selon EXCLUSIONS_PJ (nom + catégorie, insensible casse/accents).
+    Retourne (fiches_filtrées, compteurs_par_catégorie).
+    """
+    counts = {cat: 0 for cat in EXCLUSIONS_PJ}
+    filtered = []
+    for fiche in fiches:
+        nom = strip_accents(fiche.get("Nom de l'entreprise", "").lower())
+        cat = strip_accents(fiche.get("Catégorie", "").lower())
+        text = f"{nom} {cat}"
+        excluded = False
+        for category, keywords in EXCLUSIONS_PJ.items():
+            for kw in keywords:
+                if kw in text:
+                    counts[category] += 1
+                    excluded = True
+                    break
+            if excluded:
+                break
+        if not excluded:
+            filtered.append(fiche)
+    return filtered, counts
 
 
 def find_chromium():
@@ -493,12 +546,22 @@ def main():
                 activite, ville, nb_max, output_dir, proxy_url=args.proxy,
             )
 
+            # Appliquer les exclusions avant déduplication
+            fiches, excl_counts = apply_exclusions(fiches)
+            total_excl = sum(excl_counts.values())
+            if total_excl:
+                matrix_step("Exclusions appliquées :")
+                for cat_name, cnt in excl_counts.items():
+                    print(f"      - {cat_name:<26s}: {cnt} fiche{'s' if cnt != 1 else ''}")
+                print(f"      Total exclus : {total_excl} fiche{'s' if total_excl != 1 else ''}")
+
             for f in fiches:
                 f["Ville de recherche"] = ville
 
             all_city_results[ville] = fiches
             all_city_stats[ville] = stats
-            matrix_ok(f"{len(fiches)} fiches pour {ville}")
+            all_city_stats[ville]["exclusions"] = total_excl
+            matrix_ok(f"{len(fiches)} fiches pour {ville} ({total_excl} exclus)")
 
             # Cleanup backup per-city
             ville_slug = ville.lower().replace(" ", "_").replace("-", "_")

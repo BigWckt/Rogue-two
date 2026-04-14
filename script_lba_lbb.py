@@ -61,6 +61,34 @@ NAF_TO_ROME = {
     "62.01Z": ["M1805", "M1802"],
 }
 
+# ── Profils sectoriels Skill & You ──────────────────────────────────────────
+
+PROFILS_SKY = {
+    # ─── Secteur SB (Services à la personne / Santé / Beauté) ───
+    "sb_sante":           ["86.10A", "86.10Z", "86.21Z", "86.22A", "86.22B", "86.22C", "86.23Z", "86.90B"],
+    "sb_accueil_enfants": ["88.91A", "84.11Z"],
+    "sb_fleuriste":       ["47.76Z"],
+    "sb_service_personne":["88.10A", "87.10A", "87.10C", "87.30A"],
+    "sb_coiffure":        ["96.02A"],
+    "sb_esthetique":      ["96.02B"],
+
+    # ─── Secteur BTPM (Bâtiment / Mécanique) ───
+    "btpm_batiment":      ["43.99B", "74.90A", "43.99C", "41.20A", "41.20B", "43.33Z", "43.32B", "71.12B", "84.11Z"],
+    "btpm_electricite":   ["43.21A", "43.21B", "43.99C", "43.31Z", "43.22B", "43.29B", "36.00Z", "33.15Z", "45.11Z", "41.20A", "84.11Z"],
+    "btpm_plomberie":     ["43.22B", "43.22A", "43.21A", "36.00Z", "43.34Z", "41.20B"],
+    "btpm_chauffage_clim":["43.22B", "43.22A"],
+    "btpm_menuiserie":    ["84.11Z", "43.32B", "16.23Z", "31.02Z", "31.01Z", "43.29A", "41.20A", "43.99D"],
+    "btpm_meca_carrosserie":["45.20A", "45.20B", "45.32Z", "45.11Z", "45.31Z", "84.11Z"],
+    "btpm_moto":          ["45.40Z"],
+
+    # ─── Secteur TG (Tertiaire / Grand commerce) ───
+    "tg_stations_service":["47.30Z"],
+    "tg_informatique":    ["47.41Z", "47.42Z", "47.43Z"],
+    "tg_vetements_chaussures":["47.51Z", "47.52A", "47.52B", "47.53Z", "47.54Z", "47.59A", "47.59B", "47.71Z", "47.72A"],
+    "tg_sport":           ["47.64Z", "47.65Z"],
+    "tg_occasions":       ["47.79Z"],
+}
+
 # ── Fallback géocodage ────────────────────────────────────────────────────────
 
 VILLES_FALLBACK = {
@@ -420,8 +448,59 @@ def parse_args():
     return parser.parse_args()
 
 
-def load_config(args) -> tuple[list[str], list[str], int, str]:
-    """Retourne (villes, naf_codes, rayon, output_dir)."""
+def _resolve_profiles(profile_names: list[str]) -> tuple[list[str], str]:
+    """Résout un ou plusieurs noms de profils en liste de NAF dédupliquée."""
+    combined: list[str] = []
+    for name in profile_names:
+        if name not in PROFILS_SKY:
+            matrix_fail(f"Profil inconnu : « {name} »")
+            matrix_step("Profils disponibles : " + ", ".join(sorted(PROFILS_SKY)))
+            sys.exit(1)
+        combined.extend(PROFILS_SKY[name])
+    naf_codes = sorted(set(combined))
+    label = ", ".join(profile_names)
+    return naf_codes, label
+
+
+def interactive_profile_menu() -> tuple[list[str], str]:
+    """Menu interactif pour choisir un ou plusieurs profils Skill & You."""
+    print()
+    matrix_section("Sélection du profil sectoriel Skill & You")
+    names = sorted(PROFILS_SKY.keys())
+    for i, name in enumerate(names, 1):
+        naf_list = PROFILS_SKY[name]
+        print(f"    {GREEN}{i:>2}.{RESET} {name:<30s} ({len(naf_list)} codes NAF)")
+    print()
+    user_input = input(f"    Choix (numéro ou numéros séparés par virgules) > ").strip()
+    if not user_input:
+        matrix_fail("Aucun profil sélectionné")
+        sys.exit(1)
+
+    selected: list[str] = []
+    for part in user_input.split(","):
+        part = part.strip()
+        try:
+            idx = int(part) - 1
+            if 0 <= idx < len(names):
+                selected.append(names[idx])
+            else:
+                matrix_fail(f"Index hors limites : {part}")
+                sys.exit(1)
+        except ValueError:
+            # Peut-être un nom de profil directement
+            if part in PROFILS_SKY:
+                selected.append(part)
+            else:
+                matrix_fail(f"Profil inconnu : « {part} »")
+                sys.exit(1)
+
+    return _resolve_profiles(selected)
+
+
+def load_config(args) -> tuple[list[str], list[str], int, str, str | None]:
+    """Retourne (villes, naf_codes, rayon, output_dir, profile_label)."""
+    profile_label = None
+
     if args.config:
         with open(args.config, encoding="utf-8") as f:
             cfg = json.load(f)
@@ -432,32 +511,48 @@ def load_config(args) -> tuple[list[str], list[str], int, str]:
         else:
             matrix_fail("Clé 'ville' ou 'villes' manquante dans le JSON")
             sys.exit(1)
-        naf_codes = cfg["codes_naf"]
+
+        # Résolution NAF : profil > profils > codes_naf > menu interactif
+        if "profil" in cfg:
+            naf_codes, profile_label = _resolve_profiles([cfg["profil"]])
+        elif "profils" in cfg:
+            naf_codes, profile_label = _resolve_profiles(cfg["profils"])
+        elif "codes_naf" in cfg:
+            naf_codes = cfg["codes_naf"]
+        else:
+            naf_codes, profile_label = interactive_profile_menu()
+
         rayon = cfg.get("rayon_km", 30)
         output_dir = args.output  # toujours CLI, jamais le JSON
-    elif args.ville and args.naf:
+    elif args.ville:
         villes = [args.ville]
-        naf_codes = args.naf
         rayon = args.rayon
         output_dir = args.output
+        if args.naf:
+            naf_codes = args.naf
+        else:
+            naf_codes, profile_label = interactive_profile_menu()
     else:
-        matrix_fail("Spécifiez --ville et --naf, ou --config")
+        matrix_fail("Spécifiez --ville (+ --naf ou profil), ou --config")
         sys.exit(1)
 
     os.makedirs(output_dir, exist_ok=True)
-    return villes, naf_codes, rayon, output_dir
+    return villes, naf_codes, rayon, output_dir, profile_label
 
 
 # ── Main ──────────────────────────────────────────────────────────────────────
 
 def main():
     args = parse_args()
-    villes, naf_codes, rayon, output_dir = load_config(args)
+    villes, naf_codes, rayon, output_dir, profile_label = load_config(args)
     multi = len(villes) > 1
 
     # ── Bannière Matrix ──
     matrix_banner("PROSPECTION LBA + LBB")
 
+    if profile_label:
+        matrix_step(f"Profil chargé : {profile_label}")
+        matrix_step(f"Codes NAF injectés : {', '.join(naf_codes)}")
     matrix_kv("Villes", ", ".join(villes))
     matrix_kv("Codes NAF", ", ".join(naf_codes))
     matrix_kv("Rayon", f"{rayon} km")
@@ -471,13 +566,27 @@ def main():
         default_name = f"lba_lbb_results_{ville_slug}_{today_str}"
     filename = ask_filename(default_name)
 
-    # ── Résolution NAF → ROME ──
-    matrix_section("Décodage NAF → ROME")
+    # ── Vérification de cohérence NAF → ROME ──
+    matrix_section("Vérification NAF → ROME")
+    missing_naf = [naf for naf in naf_codes if naf not in NAF_TO_ROME]
+    if missing_naf:
+        for naf in missing_naf:
+            matrix_warn(f"Code NAF {naf} absent de la table NAF_TO_ROME — sera ignoré.")
+            print(f"      Ajoutez-le à la table pour activer ce mapping.")
+
+    # Résolution NAF → ROME
     rome_codes = resolve_rome_codes(naf_codes)
     if not rome_codes:
         matrix_fail("Aucun code ROME trouvé pour les NAF fournis")
         sys.exit(1)
-    matrix_ok(f"Codes ROME : {', '.join(rome_codes)}")
+
+    # Afficher le mapping effectif
+    matrix_ok(f"Codes ROME ciblés : {', '.join(rome_codes)}")
+    effective_naf = [naf for naf in naf_codes if naf in NAF_TO_ROME]
+    if effective_naf:
+        matrix_step("Mapping effectif :")
+        for naf in effective_naf:
+            print(f"      {naf} → {', '.join(NAF_TO_ROME[naf])}")
 
     # ── Boucle sur les villes ──
     all_city_results: dict[str, list[dict]] = {}

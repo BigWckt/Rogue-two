@@ -292,3 +292,48 @@ Stratégie v2 : **1 seul appel API** (`q=NOM, per_page=10`) + filtrage local en 
 - Format : CSV uniquement (plus de dépendance openpyxl pour script_comparaison.py)
 - Affichage : thème Matrix cohérent sur les 4 scripts
 - Chromium : auto-détecté par Playwright (cross-platform)
+
+---
+
+## 2026-04-14 — Exclusions PJ, profils sectoriels, vérification NAF→ROME
+
+### 1. Exclusions automatiques Pages Jaunes (`script_pages_jaunes.py`)
+
+- Ajout de `EXCLUSIONS_PJ` : dictionnaire de mots-clés d'exclusion groupés par catégorie (Pharmacies, Centres d'hébergement, Foyers jeunes, Centres de planification)
+- Filtre insensible à la casse **et aux accents** via `unicodedata.normalize('NFKD', s).encode('ASCII', 'ignore').decode()`
+- Appliqué sur le nom de l'entreprise + la catégorie PJ, après scraping et avant déduplication globale
+- Logging ventilé par catégorie en console :
+  ```
+  [+] Exclusions appliquées :
+      - Pharmacies              : 12 fiches
+      - Centres d'hébergement   : 3 fiches
+      Total exclus : 15 fiches
+  ```
+- Extensible : ajouter des mots-clés à la constante `EXCLUSIONS_PJ` en haut du script
+
+### 2. Profils sectoriels Skill & You (`script_lba_lbb.py`)
+
+- Ajout de `PROFILS_SKY` : 18 profils préconfigurés couvrant 3 secteurs :
+  - **SB** (Services / Santé / Beauté) : sb_sante, sb_accueil_enfants, sb_fleuriste, sb_service_personne, sb_coiffure, sb_esthetique
+  - **BTPM** (Bâtiment / Mécanique) : btpm_batiment, btpm_electricite, btpm_plomberie, btpm_chauffage_clim, btpm_menuiserie, btpm_meca_carrosserie, btpm_moto
+  - **TG** (Tertiaire / Grand commerce) : tg_stations_service, tg_informatique, tg_vetements_chaussures, tg_sport, tg_occasions
+- 3 modes de sélection :
+  1. **Via JSON** : clé `"profil": "sb_coiffure"` ou `"profils": ["btpm_meca_carrosserie", "btpm_moto"]`
+  2. **Via CLI** : `--naf` pour liste libre (comportement inchangé)
+  3. **Menu interactif** : si ni `profil` ni `codes_naf` dans le JSON (ou `--ville` sans `--naf`), affiche la liste numérotée des profils et demande un choix
+- Fusion multi-profils : si plusieurs profils sélectionnés, les NAF sont fusionnés et dédupliqués
+- Format `params.json` étendu : `{"villes": [...], "profil": "sb_coiffure", "rayon_km": 30}`
+
+### 3. Vérification de cohérence NAF → ROME (`script_lba_lbb.py`)
+
+- Après chargement des NAF (depuis profil ou liste libre), vérification que chaque code existe dans `NAF_TO_ROME`
+- Warning rouge pour chaque NAF manquant : `⚠️ Code NAF 88.91A absent de la table NAF_TO_ROME — sera ignoré.`
+- Affichage du mapping effectif utilisé pour le run :
+  ```
+  [+] Mapping effectif :
+      96.02A → D1202
+  ```
+- Les codes NAF sans correspondance ROME sont ignorés silencieusement par `resolve_rome_codes()` (déjà le cas), mais le warning explicite permet à l'utilisateur de compléter la table
+
+### État final
+**Fonctionnel** ✅
