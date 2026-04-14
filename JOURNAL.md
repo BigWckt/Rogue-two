@@ -337,3 +337,41 @@ Stratégie v2 : **1 seul appel API** (`q=NOM, per_page=10`) + filtrage local en 
 
 ### État final
 **Fonctionnel** ✅
+
+---
+
+## 2026-04-14 — Complétion NAF→ROME + profils MBT
+
+### 1. Table NAF_TO_ROME complétée (~80+ entrées)
+
+La table de mapping `NAF_TO_ROME` dans `script_lba_lbb.py` était incomplète : de nombreux codes NAF référencés par les profils sectoriels (santé, BTP, tertiaire) n'avaient pas de correspondance ROME, ce qui produisait 0 résultat API.
+
+**Secteurs ajoutés :**
+- **Santé 86.xx** : 86.10A, 86.10Z, 86.21Z, 86.22A/B/C, 86.23Z, 86.90B → codes ROME J11xx
+- **Social 87.xx** : 87.10A/C, 87.30A → K1301/K1302
+- **Social 88.xx** : 88.10A, 88.91A → K1301/K1303
+- **Admin** : 84.11Z → K2108
+- **BTP** (élargi) : 43.21B, 43.22B, 43.29A/B, 43.32B, 43.33Z, 43.99B/C/D, 41.20A/B, 74.90A, 71.12B, 33.15Z, 36.00Z, 16.23Z, 31.01Z, 31.02Z
+- **Automobile** (élargi) : 45.31Z, 45.32Z, 45.40Z
+- **Commerce alimentaire** (élargi) : 47.11A-F, 47.19A/B, 47.21Z-47.25Z
+- **Tertiaire 47.xx** : 47.41Z-47.43Z, 47.51Z, 47.52A/B, 47.53Z, 47.54Z, 47.59A/B, 47.64Z, 47.65Z, 47.71Z, 47.72A, 47.76Z, 47.79Z
+- **Fleuriste** : 47.76Z → D1209
+
+### 2. Profils MBT ajoutés à PROFILS_SKY
+
+3 nouveaux profils pour le secteur **MBT (Métiers de Bouche / Tertiaire)** :
+- `mbt_boulangeries` : 10.71A, 10.71B, 10.71C, 10.71D
+- `mbt_grande_distribution` : 47.11A-F, 47.19A/B, 47.21Z-47.25Z (13 codes NAF)
+- `mbt_restaurants` : 56.10A
+
+**Total profils PROFILS_SKY : 21** (6 SB + 7 BTPM + 5 TG + 3 MBT)
+
+### 3. Fichier test `params_lba_sante.json`
+
+Créé pour tester le profil `sb_sante` sur Paris 6→10 + Lyon, rayon 0 km :
+```json
+{"villes": ["Paris 6", "Paris 7", "Paris 8", "Paris 9", "Paris 10", "Lyon"], "profil": "sb_sante", "rayon_km": 0}
+```
+
+### État final
+**Fonctionnel** ✅ — Tous les codes NAF des profils existants ont désormais une correspondance ROME dans la table
