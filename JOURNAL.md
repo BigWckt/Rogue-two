@@ -406,3 +406,40 @@ Debug temporaire sur la réponse brute. Structure constatée :
 
 ### État final
 **Fonctionnel** ✅
+
+---
+
+## 2026-04-14 — Fusion téléphone par fallback nom+CP (script_comparaison.py)
+
+### Problème
+Le croisement PJ ↔ LBA/LBB se fait uniquement par SIRET. Quand une entreprise LBA/LBB n'a pas de téléphone (fréquent pour LBB : `apply.phone` souvent `null`), et que la même entreprise existe dans PJ avec un téléphone mais un SIRET différent (maison-mère vs établissement, ou SIRET non trouvé), le téléphone était perdu.
+
+### Solution : enrichissement en 2 étapes
+
+**Étape 1 — Croisement SIRET (inchangé)** : fusion PJ + LBA/LBB par SIRET exact, scoring priorité Haute/Moyenne/Basse.
+
+**Étape 2 — Fallback téléphone par nom + CP (nouveau)** :
+- Pour chaque lead final sans téléphone, cherche dans TOUTES les fiches PJ (y compris celles sans SIRET)
+- Filtre par code postal exact (normalisé 5 chiffres, `zfill(5)`)
+- Matching fuzzy du nom via `rapidfuzz.fuzz.token_sort_ratio` après normalisation (strip accents, uppercase, suppression formes juridiques SARL/SAS/EURL/SCI/SASU/EI/SELARL)
+- Seuil : ≥ 85% de similarité pour valider le match
+- Ne jamais écraser un téléphone déjà rempli
+
+### Corrections apportées
+
+1. **Nouveaux imports** : `re`, `unicodedata`, `rapidfuzz.fuzz`
+2. **Helpers** : `normalize_cp()` (zfill 5), `strip_accents()` (NFKD), `clean_name()` (strip accents + uppercase + suppression formes juridiques)
+3. **`load_pj_all_fiches(filepath)`** : charge TOUTES les fiches PJ avec téléphone (pas seulement celles avec SIRET), pré-calcule `_cp_norm` et `_name_clean` pour chaque fiche
+4. **`enrich_phones_fallback(leads, pj_fiches)`** : indexe les fiches PJ par CP, puis pour chaque lead sans téléphone fait un matching fuzzy nom + CP exact
+5. **Colonne `Source téléphone`** ajoutée à `OUTPUT_COLUMNS` : valeurs possibles = `PJ direct`, `PJ fallback nom+CP`, `LBA`, `LBB`, ou vide
+6. **`merge_and_score()`** : mis à jour pour renseigner `Source téléphone` lors du croisement SIRET (PJ prioritaire sur LBA/LBB pour le téléphone)
+7. **Synthèse console** : bloc dédié avec compteurs (déjà présents / ajoutés via PJ / toujours sans / total final)
+
+### Test synthétique (7 entreprises)
+- 4 téléphones déjà présents (1 PJ direct par SIRET, 1 LBB, 2 PJ direct Basse)
+- **1 téléphone ajouté via fallback** : Centre Médical Lyon Est (LBB sans SIRET match PJ, retrouvé par nom+CP 69003, score >85%)
+- 2 toujours sans téléphone (Dr Dupont : score 59% < 85% à cause du suffixe "Chirurgien Dentiste" ; Pharmacie du Parc : CP différent 69002 vs 69007)
+- Total : 5/7 (71%)
+
+### État final
+**Fonctionnel** ✅

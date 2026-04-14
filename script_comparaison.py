@@ -13,10 +13,13 @@ Usage :
 
 import argparse
 import os
+import re
 import sys
+import unicodedata
 from datetime import date
 
 import pandas as pd
+from rapidfuzz import fuzz
 
 from matrix_display import (
     GREEN, RED, BOLD, RESET,
@@ -35,6 +38,7 @@ OUTPUT_COLUMNS = [
     "Ville",
     "Code Postal",
     "Téléphone",
+    "Source téléphone",
     "Site web",
     "Priorité",
     "Source",
@@ -55,6 +59,32 @@ def normalize_siret(raw) -> str:
         return str(int(float(str(raw).strip()))).zfill(14)
     except (ValueError, OverflowError):
         return str(raw).strip()
+
+
+def normalize_cp(raw) -> str:
+    """Normalise un code postal : 5 chiffres, padded à gauche."""
+    if raw is None:
+        return ""
+    digits = re.sub(r"\D", "", str(raw).strip())
+    if not digits:
+        return ""
+    return digits.zfill(5)
+
+
+def strip_accents(s: str) -> str:
+    """Supprime les accents (é→e, è→e, etc.)."""
+    return unicodedata.normalize("NFKD", s).encode("ASCII", "ignore").decode()
+
+
+def clean_name(name: str) -> str:
+    """Normalise un nom d'entreprise pour la comparaison fuzzy."""
+    name = strip_accents(name).upper().strip()
+    for suffix in ["SARL", "SAS", "SA", "EURL", "SCI", "SASU", "EI", "SELARL"]:
+        name = re.sub(rf"\b{suffix}\b", "", name)
+    return re.sub(r"\s+", " ", name).strip()
+
+
+PHONE_FALLBACK_THRESHOLD = 85
 
 
 def load_lba_lbb(filepath: str) -> dict[str, dict]:
@@ -89,6 +119,78 @@ def load_pj_enrichi(filepath: str) -> dict[str, dict]:
         if siret not in by_siret:
             by_siret[siret] = rec
     return by_siret
+
+
+def load_pj_all_fiches(filepath: str) -> list[dict]:
+    """Charge TOUTES les fiches PJ enrichies (avec ou sans SIRET) pour le fallback téléphone."""
+    df = pd.read_csv(filepath, encoding="utf-8-sig", dtype=str).fillna("")
+    fiches = []
+    for _, row in df.iterrows():
+        rec = row.to_dict()
+        tel = rec.get("Téléphone", "").strip()
+        if not tel:
+            continue
+        rec["_cp_norm"] = normalize_cp(rec.get("Code Postal", ""))
+        rec["_name_clean"] = clean_name(rec.get("Nom de l'entreprise", ""))
+        fiches.append(rec)
+    return fiches
+
+
+# ── Fallback téléphone par nom + CP ─────────────────────────────────────────
+
+def _build_pj_by_cp(pj_fiches: list[dict]) -> dict[str, list[dict]]:
+    """Index les fiches PJ par code postal normalisé."""
+    by_cp: dict[str, list[dict]] = {}
+    for fiche in pj_fiches:
+        cp = fiche["_cp_norm"]
+        if cp:
+            by_cp.setdefault(cp, []).append(fiche)
+    return by_cp
+
+
+def enrich_phones_fallback(leads: list[dict], pj_fiches: list[dict]) -> dict:
+    """
+    Étape 2 : pour chaque lead sans téléphone, tente un matching fuzzy
+    nom + CP exact dans les fiches PJ.
+    Retourne les stats d'enrichissement.
+    """
+    pj_by_cp = _build_pj_by_cp(pj_fiches)
+
+    stats = {"already": 0, "added": 0, "missing": 0}
+
+    for lead in leads:
+        tel = lead.get("Téléphone", "").strip()
+        if tel:
+            stats["already"] += 1
+            continue
+
+        lead_cp = normalize_cp(lead.get("Code Postal", ""))
+        lead_name = clean_name(lead.get("Nom de l'entreprise", ""))
+        if not lead_cp or not lead_name:
+            stats["missing"] += 1
+            continue
+
+        candidates = pj_by_cp.get(lead_cp, [])
+        if not candidates:
+            stats["missing"] += 1
+            continue
+
+        best_score = 0
+        best_fiche = None
+        for fiche in candidates:
+            score = fuzz.token_sort_ratio(lead_name, fiche["_name_clean"])
+            if score > best_score:
+                best_score = score
+                best_fiche = fiche
+
+        if best_fiche and best_score >= PHONE_FALLBACK_THRESHOLD:
+            lead["Téléphone"] = best_fiche.get("Téléphone", "")
+            lead["Source téléphone"] = "PJ fallback nom+CP"
+            stats["added"] += 1
+        else:
+            stats["missing"] += 1
+
+    return stats
 
 
 # ── Croisement ────────────────────────────────────────────────────────────────
@@ -127,10 +229,20 @@ def merge_and_score(pj_data: dict[str, dict],
             lead["Adresse"] = pj.get("Adresse") or lba.get("Adresse", "")
             lead["Ville"] = pj.get("Ville") or lba.get("Ville", "")
             lead["Code Postal"] = pj.get("Code Postal") or lba.get("Code Postal", "")
-            lead["Téléphone"] = pj.get("Téléphone", "")
             lead["Site web"] = pj.get("Site web", "")
             lead["Score LBB"] = lba.get("Score LBB", "")
             lead["Offres actives"] = lba.get("Offres actives", "")
+
+            # Téléphone : PJ prioritaire, fallback LBA/LBB
+            pj_tel = pj.get("Téléphone", "").strip()
+            lba_tel = lba.get("Téléphone", "").strip()
+            if pj_tel:
+                lead["Téléphone"] = pj_tel
+                lead["Source téléphone"] = "PJ direct"
+            elif lba_tel:
+                lead["Téléphone"] = lba_tel
+                lba_source_raw = lba.get("Source", "")
+                lead["Source téléphone"] = "LBA" if "LBA" in lba_source_raw else "LBB"
 
             lba_source = lba.get("Source", "")
             if "LBA" in lba_source:
@@ -149,6 +261,12 @@ def merge_and_score(pj_data: dict[str, dict],
             lead["Score LBB"] = lba.get("Score LBB", "")
             lead["Offres actives"] = lba.get("Offres actives", "")
 
+            lba_tel = lba.get("Téléphone", "").strip()
+            if lba_tel:
+                lead["Téléphone"] = lba_tel
+                lba_source_raw = lba.get("Source", "")
+                lead["Source téléphone"] = "LBA" if "LBA" in lba_source_raw else "LBB"
+
             lba_source = lba.get("Source", "")
             if "LBA" in lba_source:
                 lead["Priorité"] = "Haute"
@@ -163,10 +281,14 @@ def merge_and_score(pj_data: dict[str, dict],
             lead["Adresse"] = pj.get("Adresse", "")
             lead["Ville"] = pj.get("Ville", "")
             lead["Code Postal"] = pj.get("Code Postal", "")
-            lead["Téléphone"] = pj.get("Téléphone", "")
             lead["Site web"] = pj.get("Site web", "")
             lead["Priorité"] = "Basse"
             lead["Source"] = "Pages Jaunes"
+
+            pj_tel = pj.get("Téléphone", "").strip()
+            if pj_tel:
+                lead["Téléphone"] = pj_tel
+                lead["Source téléphone"] = "PJ direct"
 
         if lead["Priorité"] == "Haute":
             stats["haute"] += 1
@@ -224,6 +346,7 @@ def main():
     # Charger les données
     pj_data: dict[str, dict] = {}
     lba_data: dict[str, dict] = {}
+    pj_all_fiches: list[dict] = []
 
     if args.pj:
         if not os.path.exists(args.pj):
@@ -232,6 +355,9 @@ def main():
             matrix_step(f"Chargement PJ enrichi : {args.pj}")
             pj_data = load_pj_enrichi(args.pj)
             matrix_ok(f"{len(pj_data)} entreprises avec SIRET")
+            # Charger toutes les fiches PJ (avec ou sans SIRET) pour le fallback téléphone
+            pj_all_fiches = load_pj_all_fiches(args.pj)
+            matrix_ok(f"{len(pj_all_fiches)} fiches PJ avec téléphone (pour fallback)")
 
     if args.lba:
         if not os.path.exists(args.lba):
@@ -261,13 +387,20 @@ def main():
     default_name = f"leads_qualifies_{ville}_{today_str}"
     filename = ask_filename(default_name)
 
-    # ── Croisement ──
-    matrix_section("Croisement par SIRET — fusion des réalités")
+    # ── Étape 1 : Croisement par SIRET ──
+    matrix_section("Étape 1 — Croisement par SIRET")
     leads, stats = merge_and_score(pj_data, lba_data)
 
     if not leads:
         matrix_warn("Aucun lead généré")
         sys.exit(0)
+
+    # ── Étape 2 : Enrichissement téléphone par fallback nom + CP ──
+    phone_stats = {"already": 0, "added": 0, "missing": 0}
+    if pj_all_fiches:
+        matrix_section("Étape 2 — Enrichissement téléphone (fallback nom+CP)")
+        phone_stats = enrich_phones_fallback(leads, pj_all_fiches)
+        matrix_ok(f"Téléphones ajoutés via PJ : {phone_stats['added']}")
 
     # ── Export CSV ──
     csv_path = os.path.join(args.output, f"{filename}.csv")
@@ -288,6 +421,19 @@ def main():
     matrix_kv("Priorité Basse (PJ seul)", f"{stats['basse']} entreprises")
     matrix_separator()
     matrix_kv("Total leads qualifiés", f"{len(leads)} entreprises")
+
+    # ── Stats téléphone ──
+    if pj_all_fiches:
+        matrix_separator()
+        n_total_tel = phone_stats["already"] + phone_stats["added"]
+        pct = f"{n_total_tel / len(leads) * 100:.0f}%" if leads else "0%"
+        matrix_section("Enrichissement téléphone par fallback nom+CP")
+        matrix_kv("Téléphones déjà présents", f"{phone_stats['already']}")
+        matrix_kv("Téléphones ajoutés via PJ", f"{phone_stats['added']}")
+        matrix_kv("Toujours sans téléphone", f"{phone_stats['missing']}")
+        matrix_kv("Total avec téléphone (final)", f"{n_total_tel} / {len(leads)} ({pct})")
+
+    matrix_separator()
     matrix_kv("Fichier", os.path.basename(csv_path))
 
     # ── Clôture Matrix ──
