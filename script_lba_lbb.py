@@ -191,7 +191,7 @@ REQUEST_TIMEOUT = 30
 
 OUTPUT_COLUMNS = [
     "Nom de l'entreprise", "SIRET", "Code NAF", "Adresse", "Ville",
-    "Code Postal", "Ville de recherche", "Source", "Score LBB",
+    "Code Postal", "Téléphone", "Ville de recherche", "Source", "Score LBB",
     "Offres actives", "Date de collecte",
 ]
 
@@ -205,6 +205,34 @@ def normalize_siret(raw) -> str:
         return str(int(float(str(raw).strip()))).zfill(14)
     except (ValueError, OverflowError):
         return str(raw).strip()
+
+
+def normalize_phone(raw: str) -> str:
+    """Nettoie et valide un numéro de téléphone français. Retourne 10 chiffres ou ''."""
+    if not raw:
+        return ""
+    cleaned = re.sub(r"[\s.\-\(\)]+", "", raw.strip())
+    if cleaned.startswith("+33"):
+        cleaned = "0" + cleaned[3:]
+    digits = re.sub(r"\D", "", cleaned)
+    if digits and re.match(r"^0[1-9]\d{8}$", digits):
+        return digits
+    return ""
+
+
+def extract_phone(entry: dict) -> str:
+    """Cherche le téléphone dans plusieurs chemins possibles d'un item API."""
+    candidates = [
+        (entry.get("apply") or {}).get("phone"),
+        ((entry.get("workplace") or {}).get("contact") or {}).get("phone"),
+        (entry.get("contact") or {}).get("phone"),
+        entry.get("phone"),
+        entry.get("telephone"),
+    ]
+    for c in candidates:
+        if c and str(c).strip():
+            return normalize_phone(str(c))
+    return ""
 
 
 def http_get(url, params=None, headers=None):
@@ -323,6 +351,8 @@ def _extract_lba_company(item: dict) -> dict | None:
     ville = place.get("city") or ville
     cp = place.get("zipCode") or cp
 
+    phone = extract_phone(item)
+
     return {
         "Nom de l'entreprise": name,
         "SIRET": siret,
@@ -330,6 +360,7 @@ def _extract_lba_company(item: dict) -> dict | None:
         "Adresse": addr,
         "Ville": ville,
         "Code Postal": cp,
+        "Téléphone": phone,
     }
 
 
@@ -359,6 +390,8 @@ def _extract_lbb_company(item: dict) -> dict | None:
 
     score = company.get("score") or item.get("hiring_potential") or ""
 
+    phone = extract_phone(item)
+
     return {
         "Nom de l'entreprise": name,
         "SIRET": siret,
@@ -366,6 +399,7 @@ def _extract_lbb_company(item: dict) -> dict | None:
         "Adresse": addr,
         "Ville": ville,
         "Code Postal": cp,
+        "Téléphone": phone,
         "Score LBB": str(score) if score else "",
     }
 
@@ -738,7 +772,10 @@ def main():
             print(f"    {GREEN}▸{RESET} {ville}: {BOLD}{st['n_unique']}{RESET} uniques "
                   f"({st['n_lba']} LBA, {st['n_lbb']} LBB, {st['n_doublons']} doublons)")
         matrix_separator()
+        n_phones = sum(1 for r in consolidated if r.get("Téléphone"))
+        pct_phones = f"{n_phones / len(consolidated) * 100:.0f}%" if consolidated else "0%"
         matrix_kv("Total consolidé (dédup SIRET)", f"{len(consolidated)} entreprises")
+        matrix_kv("Téléphones extraits", f"{n_phones} / {len(consolidated)} entreprises ({pct_phones})")
         matrix_kv("Fichier", os.path.basename(csv_path))
     else:
         ville = villes[0]
@@ -758,7 +795,10 @@ def main():
         matrix_kv("LBB (potentiel)", f"{st['n_lbb']} entreprises")
         matrix_kv("Doublons LBA+LBB", f"{st['n_doublons']} entreprises")
         matrix_separator()
+        n_phones = sum(1 for r in rows if r.get("Téléphone"))
+        pct_phones = f"{n_phones / len(rows) * 100:.0f}%" if rows else "0%"
         matrix_kv("Total unique (par SIRET)", f"{len(rows)} entreprises")
+        matrix_kv("Téléphones extraits", f"{n_phones} / {len(rows)} entreprises ({pct_phones})")
         matrix_kv("Fichier", os.path.basename(csv_path))
 
     # ── Clôture Matrix ──

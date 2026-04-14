@@ -375,3 +375,34 @@ Créé pour tester le profil `sb_sante` sur Paris 6→10 + Lyon, rayon 0 km :
 
 ### État final
 **Fonctionnel** ✅ — Tous les codes NAF des profils existants ont désormais une correspondance ROME dans la table
+
+---
+
+## 2026-04-14 — Extraction des téléphones dans script_lba_lbb.py
+
+### Problème
+Le CSV de sortie LBA/LBB ne contenait jamais de numéro de téléphone : la colonne `Téléphone` n'existait pas dans `OUTPUT_COLUMNS` et les fonctions d'extraction (`_extract_lba_company`, `_extract_lbb_company`) ne récupéraient pas le champ.
+
+### Inspection API
+Debug temporaire sur la réponse brute. Structure constatée :
+- **Offres LBA** (`jobs`) : téléphone dans `apply.phone` (ex: `"0749123569"`)
+- **Entreprises LBB** (`recruiters`) : téléphone dans `apply.phone` (souvent `null` pour LBB)
+
+### Corrections apportées
+
+1. **`extract_phone(entry)`** : fonction utilitaire qui cherche le téléphone dans 5 chemins possibles (`apply.phone`, `workplace.contact.phone`, `contact.phone`, `phone`, `telephone`) et retourne le premier non-vide
+2. **`normalize_phone(raw)`** : nettoyage (suppression espaces/points/tirets/parenthèses), conversion `+33` → `0`, validation regex `^0[1-9]\d{8}$` (même logique que `validate_phone` dans `script_pages_jaunes.py`)
+3. **`_extract_lba_company`** et **`_extract_lbb_company`** : intégration de `extract_phone(item)` dans le dict de retour
+4. **`OUTPUT_COLUMNS`** : ajout de `Téléphone` entre `Code Postal` et `Ville de recherche`
+5. **Synthèse console** : compteur `Téléphones extraits : N / M entreprises (X%)` dans les deux modes (mono/multi-villes)
+
+### Résultats du test (sb_sante, Paris 6→10 + Lyon, rayon 0 km)
+- 320 entreprises collectées (1 LBA + 319 LBB)
+- **89 téléphones extraits (28%)**
+  - LBA : quasi-systématique (champ `apply.phone` renseigné)
+  - LBB : plus rare (~25%) car le champ est souvent `null`
+- 0 warning NAF→ROME
+- Numéros validés : 10 chiffres français, format cohérent avec `script_pages_jaunes.py`
+
+### État final
+**Fonctionnel** ✅
