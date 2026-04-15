@@ -25,7 +25,7 @@ from matrix_display import (
     GREEN, RED, BOLD, RESET,
     matrix_banner, matrix_section, matrix_kv, matrix_separator,
     matrix_step, matrix_ok, matrix_fail, matrix_warn,
-    morpheus_says, ask_filename,
+    morpheus_says, ask_filename, matrix_decode, set_quiet,
 )
 
 # ── Colonnes de sortie (noms HubSpot) ────────────────────────────────────────
@@ -292,6 +292,7 @@ def merge_and_score(pj_data: dict[str, dict],
 
         if lead["Priorité"] == "Haute":
             stats["haute"] += 1
+            matrix_decode(lead["Nom de l'entreprise"], prefix=f"    {GREEN}★ HAUTE ▸{RESET} ")
         elif lead["Priorité"] == "Moyenne":
             stats["moyenne"] += 1
         elif lead["Priorité"] == "Basse":
@@ -326,6 +327,8 @@ def parse_args():
                         help="Fichier LBA/LBB (.csv)")
     parser.add_argument("--output", type=str, default=".",
                         help="Répertoire de sortie (défaut: racine repo)")
+    parser.add_argument("--quiet", action="store_true",
+                        help="Mode silencieux (désactive les animations)")
     return parser.parse_args()
 
 
@@ -333,6 +336,8 @@ def parse_args():
 
 def main():
     args = parse_args()
+    if args.quiet:
+        set_quiet(True)
 
     if not args.pj and not args.lba:
         matrix_fail("Spécifiez au moins --pj ou --lba")

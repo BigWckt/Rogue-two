@@ -26,7 +26,7 @@ from matrix_display import (
     GREEN, RED, BOLD, RESET,
     matrix_banner, matrix_section, matrix_kv, matrix_separator,
     matrix_step, matrix_ok, matrix_fail, matrix_warn,
-    morpheus_says, ask_filename,
+    morpheus_says, ask_filename, matrix_decode, set_quiet,
 )
 
 # ── Table NAF → ROME ─────────────────────────────────────────────────────────
@@ -446,6 +446,7 @@ def fetch_search(rome_codes: list[str], lat: float, lon: float, radius: int) -> 
                 row["Date de collecte"] = today
                 lba_rows.append(row)
                 lba_count += 1
+                matrix_decode(row["Nom de l'entreprise"], prefix=f"    {GREEN}LBA ▸{RESET} ")
 
         lbb_count = 0
         for item in recruiters:
@@ -457,6 +458,8 @@ def fetch_search(rome_codes: list[str], lat: float, lon: float, radius: int) -> 
                 row["Date de collecte"] = today
                 lbb_rows.append(row)
                 lbb_count += 1
+                if lbb_count <= 3:
+                    matrix_decode(row["Nom de l'entreprise"], prefix=f"    {GREEN}LBB ▸{RESET} ")
 
         matrix_ok(f"Décodage : {lba_count} LBA + {lbb_count} LBB")
         time.sleep(API_DELAY)
@@ -533,6 +536,8 @@ def parse_args():
     parser.add_argument("--rayon", type=int, default=30, help="Rayon en km (défaut: 30)")
     parser.add_argument("--output", type=str, default=".", help="Répertoire de sortie (défaut: racine repo)")
     parser.add_argument("--config", type=str, help="Fichier JSON de paramètres")
+    parser.add_argument("--quiet", action="store_true",
+                        help="Mode silencieux (désactive les animations)")
     return parser.parse_args()
 
 
@@ -632,6 +637,8 @@ def load_config(args) -> tuple[list[str], list[str], int, str, str | None]:
 
 def main():
     args = parse_args()
+    if args.quiet:
+        set_quiet(True)
     villes, naf_codes, rayon, output_dir, profile_label = load_config(args)
     multi = len(villes) > 1
 

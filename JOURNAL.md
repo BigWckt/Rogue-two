@@ -443,3 +443,39 @@ Le croisement PJ ↔ LBA/LBB se fait uniquement par SIRET. Quand une entreprise 
 
 ### État final
 **Fonctionnel** ✅
+
+---
+
+## 2026-04-15 — Effet visuel Matrix decode (4 scripts)
+
+### Ce qui a été fait
+
+Ajout d'un effet visuel "Matrix decode" : quand un nom d'entreprise est collecté, les caractères apparaissent d'abord en katakana aléatoires puis se révèlent progressivement en lettres réelles, comme si le système décryptait l'information de la Matrice.
+
+### Implémentation
+
+1. **`matrix_display.py`** — nouvelle fonction `matrix_decode(text, prefix, steps=4, delay=0.06)` :
+   - 4 étapes d'animation, chaque étape révèle 25% supplémentaire du texte réel
+   - Caractères non révélés remplacés par des katakana aléatoires (pleine largeur)
+   - `\r` (retour chariot) pour écraser la ligne à chaque étape
+   - Délai total : 4 × 0.06s = 0.24s par ligne
+   - **Fallback Windows** : `_decode_chars()` teste si le terminal supporte les katakana via `sys.stdout.encoding`, sinon utilise des caractères ASCII (`!@#$%^&*<>{}[]|~0-9a-f`)
+   - **Mode silencieux** : si `QUIET=True`, affiche le texte d'un coup sans animation
+
+2. **Flag `--quiet`** ajouté aux 4 scripts via `argparse` + appel `set_quiet(True)` au début de `main()`
+
+3. **Intégration par script** :
+   - `script_lba_lbb.py` : decode pour chaque entreprise LBA (toutes) + les 3 premières LBB par code ROME (préfixes `LBA ▸` / `LBB ▸`)
+   - `script_pages_jaunes.py` : decode pour chaque fiche PJ collectée (préfixe `PJ ▸`)
+   - `script_enrichissement.py` : decode quand un SIRET est trouvé — format `nom → SIRET (score%)` (préfixe `SIRET ▸`)
+   - `script_comparaison.py` : decode uniquement pour les entreprises Priorité Haute (préfixe `★ HAUTE ▸`)
+
+### Contraintes respectées
+- Délai total ≤ 0.25s par ligne (4 × 0.06s = 0.24s)
+- LBB limité aux 3 premières par ROME pour éviter un overhead excessif (~150 LBB par ROME)
+- `--quiet` désactive toutes les animations (mode batch)
+- Les compteurs, warnings et récaps restent en texte normal
+- Katakana katakana → fallback ASCII si encodage terminal incompatible
+
+### État final
+**Fonctionnel** ✅

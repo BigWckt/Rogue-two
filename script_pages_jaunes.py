@@ -33,7 +33,7 @@ from matrix_display import (
     GREEN, RED, BOLD, RESET,
     matrix_banner, matrix_section, matrix_kv, matrix_separator,
     matrix_step, matrix_ok, matrix_fail, matrix_warn,
-    morpheus_says, ask_filename,
+    morpheus_says, ask_filename, matrix_decode, set_quiet,
 )
 
 # ── User-Agent pool ──────────────────────────────────────────────────────────
@@ -435,6 +435,7 @@ def scrape_pages_jaunes(activite: str, ville: str, nb_max: int,
 
                 fiches.append(fiche)
                 page_count += 1
+                matrix_decode(fiche.get("Nom de l'entreprise", ""), prefix=f"    {GREEN}PJ ▸{RESET} ")
 
             stats["pages_parcourues"] = page_num
             matrix_ok(f"{page_count} fiches ({len(fiches)} total)")
@@ -478,6 +479,8 @@ def parse_args():
     parser.add_argument("--output", type=str, default=".",
                         help="Répertoire de sortie (défaut: racine repo)")
     parser.add_argument("--config", type=str, help="Fichier JSON de paramètres")
+    parser.add_argument("--quiet", action="store_true",
+                        help="Mode silencieux (désactive les animations)")
     parser.add_argument("--proxy", type=str, default=None,
                         help="Proxy explicite (ex: http://user:pass@host:port)")
     return parser.parse_args()
@@ -515,6 +518,8 @@ def load_config(args) -> tuple[list[str], str, int, str]:
 
 def main():
     args = parse_args()
+    if args.quiet:
+        set_quiet(True)
     villes, activite, nb_max, output_dir = load_config(args)
     multi = len(villes) > 1
 

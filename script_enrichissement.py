@@ -26,7 +26,7 @@ from matrix_display import (
     GREEN, RED, BOLD, RESET,
     matrix_banner, matrix_section, matrix_kv, matrix_separator,
     matrix_step, matrix_ok, matrix_fail, matrix_warn,
-    morpheus_says, ask_filename,
+    morpheus_says, ask_filename, matrix_decode, set_quiet,
 )
 
 # ── Config ────────────────────────────────────────────────────────────────────
@@ -269,6 +269,8 @@ def parse_args():
                         help="Répertoire de sortie (défaut: racine repo)")
     parser.add_argument("--resume", action="store_true",
                         help="Reprendre depuis le dernier checkpoint")
+    parser.add_argument("--quiet", action="store_true",
+                        help="Mode silencieux (désactive les animations)")
     return parser.parse_args()
 
 
@@ -276,6 +278,8 @@ def parse_args():
 
 def main():
     args = parse_args()
+    if args.quiet:
+        set_quiet(True)
     input_file = args.input
 
     if not os.path.exists(input_file):
@@ -342,7 +346,8 @@ def main():
         row["Score similarité"] = str(result["score"]) if result["score"] else ""
 
         if result["status"] == "SIRET trouvé":
-            print(f"{GREEN}✓{RESET} {result['siret']} ({result['score']}%)")
+            print(f"{GREEN}✓{RESET}")
+            matrix_decode(f"{nom[:50]} → {result['siret']} ({result['score']}%)", prefix=f"    {GREEN}SIRET ▸{RESET} ")
         elif result["status"].startswith("Exclu — erreur"):
             print(f"{RED}! Erreur API{RESET}")
             n_errors += 1

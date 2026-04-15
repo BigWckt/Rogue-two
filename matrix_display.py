@@ -8,6 +8,8 @@ Partage entre les 4 scripts de prospection.
 
 import random
 import shutil
+import sys
+import time
 
 # ── ANSI Colors ──────────────────────────────────────────────────────────────
 
@@ -20,6 +22,57 @@ RESET = "\033[0m"
 # ── Matrix characters ───────────────────────────────────────────────────────
 
 MATRIX_CHARS = "ﾊﾐﾋｰｳｼﾅﾓﾆｻﾜﾂｵﾘｱﾎﾃﾏｹﾒｴｶｷﾑﾕﾗｾﾈｽﾀﾇﾍ0123456789"
+
+# Katakana pleine largeur pour le décodage (meilleur rendu)
+KATAKANA = "アイウエオカキクケコサシスセソタチツテトナニヌネノハヒフヘホマミムメモヤユヨラリルレロワヲン"
+
+# Fallback ASCII si le terminal ne supporte pas UTF-8
+ASCII_FALLBACK = "!@#$%^&*<>{}[]|~0123456789abcdef"
+
+# ── Mode silencieux (global, activé par --quiet dans chaque script) ────────
+
+QUIET = False
+
+
+def set_quiet(value: bool):
+    """Active/désactive le mode silencieux."""
+    global QUIET
+    QUIET = value
+
+
+def _decode_chars() -> str:
+    """Retourne les caractères de décodage adaptés au terminal."""
+    try:
+        "ア".encode(sys.stdout.encoding or "utf-8")
+        return KATAKANA
+    except (UnicodeEncodeError, LookupError):
+        return ASCII_FALLBACK
+
+
+def matrix_decode(text: str, prefix: str = "  [+] ", steps: int = 4, delay: float = 0.06):
+    """Affiche 'text' en décodant progressivement des katakana vers les vrais caractères."""
+    if QUIET:
+        print(f"{prefix}{text}")
+        return
+
+    chars = _decode_chars()
+    length = len(text)
+    for step in range(steps):
+        revealed = int(length * (step + 1) / steps)
+        line = ""
+        for i, char in enumerate(text):
+            if char == " ":
+                line += " "
+            elif i < revealed:
+                line += char
+            else:
+                line += random.choice(chars)
+        sys.stdout.write(f"\r{GREEN}{prefix}{RESET}{line}")
+        sys.stdout.flush()
+        time.sleep(delay)
+    sys.stdout.write(f"\r{GREEN}{prefix}{RESET}{text}\n")
+    sys.stdout.flush()
+
 
 # ── Morpheus quotes ─────────────────────────────────────────────────────────
 
