@@ -22,11 +22,16 @@ from datetime import date
 import pandas as pd
 import requests
 
+from batch_io import (
+    detect_secteur, find_prosp_root, next_batch_number,
+    write_current_batch, SECTEUR_PREFIXES,
+)
 from matrix_display import (
     GREEN, RED, BOLD, RESET,
     matrix_banner, matrix_section, matrix_kv, matrix_separator,
     matrix_step, matrix_ok, matrix_fail, matrix_warn,
     morpheus_says, ask_filename, matrix_decode, set_quiet,
+    matrix_rain_fullscreen,
 )
 
 # ── Table NAF → ROME ─────────────────────────────────────────────────────────
@@ -38,6 +43,7 @@ NAF_TO_ROME = {
     "10.71C": ["D1102", "D1104"], "10.71D": ["D1104"],
     "56.10A": ["G1602", "G1603"], "56.10B": ["G1603"],
     "56.10C": ["G1603"], "56.21Z": ["G1602"],
+    "50.10A": ["G1204"],  # Transports maritimes (inclus à la demande dans mbt_restaurants)
     # Hôtellerie
     "55.10Z": ["G1703", "G1501"],
     # Commerce alimentaire
@@ -140,7 +146,14 @@ PROFILS_SKY = {
     "mbt_boulangeries":          ["10.71A", "10.71B", "10.71C", "10.71D"],
     "mbt_grande_distribution":   ["47.11A", "47.11B", "47.11C", "47.11D", "47.11E", "47.11F",
                                   "47.19A", "47.19B", "47.21Z", "47.22Z", "47.23Z", "47.24Z", "47.25Z"],
-    "mbt_restaurants":           ["56.10A"],
+    "mbt_restaurants":           ["56.10A", "50.10A"],
+}
+
+# ── Avertissements de cohérence sémantique NAF ───────────────────────────────
+# Codes NAF dont la signification réelle peut surprendre l'utilisateur.
+NAF_SEMANTIC_WARNINGS = {
+    "50.10A": "⚠ 50.10A = 'Transports maritimes et côtiers de passagers' (pas 'Restaurant'). "
+              "Inclus dans mbt_restaurants à la demande explicite.",
 }
 
 # ── Fallback géocodage ────────────────────────────────────────────────────────
@@ -538,6 +551,8 @@ def parse_args():
     parser.add_argument("--config", type=str, help="Fichier JSON de paramètres")
     parser.add_argument("--quiet", action="store_true",
                         help="Mode silencieux (désactive les animations)")
+    parser.add_argument("--batch", type=str, default=None,
+                        help="Chemin de batch forcé (ex: Prosp/SB/batch_2)")
     return parser.parse_args()
 
 
@@ -590,9 +605,69 @@ def interactive_profile_menu() -> tuple[list[str], str]:
     return _resolve_profiles(selected)
 
 
+def _resolve_batch_output(args, profile_names: list[str]) -> tuple[str, str | None, str | None]:
+    """
+    Détermine le dossier de sortie batch.
+    Retourne (output_dir, secteur, batch_path).
+    """
+    from datetime import date as _date
+
+    # --batch CLI force un chemin explicite
+    if args.batch:
+        os.makedirs(args.batch, exist_ok=True)
+        return args.batch, None, args.batch
+
+    # Pas de profil = pas de batch auto
+    if not profile_names:
+        os.makedirs(args.output, exist_ok=True)
+        return args.output, None, None
+
+    # Détecter le secteur
+    secteur = detect_secteur(profile_names)
+    if not secteur:
+        known = list(SECTEUR_PREFIXES.values())
+        print(f"\n    Profils multi-secteurs détectés. Dans quel secteur ranger ce batch ?")
+        for i, s in enumerate(known, 1):
+            print(f"      {GREEN}{i}.{RESET} {s}")
+        choice = input("    Choix > ").strip()
+        try:
+            secteur = known[int(choice) - 1]
+        except (ValueError, IndexError):
+            secteur = choice.upper()
+
+    # Chercher Prosp/ en remontant
+    prosp_root = find_prosp_root()
+    if prosp_root:
+        secteur_dir = os.path.join(prosp_root, secteur)
+    else:
+        matrix_warn("Dossier Prosp/ introuvable — création dans le dossier courant.")
+        secteur_dir = os.path.join(".", secteur)
+
+    # Numéro de batch
+    n = next_batch_number(secteur_dir)
+    batch_dir = os.path.join(secteur_dir, f"batch_{n}")
+
+    # Confirmation
+    print(f"\n    {GREEN}▸{RESET} Secteur détecté : {BOLD}{secteur}{RESET}")
+    print(f"    {GREEN}▸{RESET} Dossier de sortie : {BOLD}{batch_dir}/{RESET}")
+    confirm = input("    Créer ce dossier ? (O/n) > ").strip().lower()
+    if confirm == "n":
+        matrix_fail("Abandonné par l'utilisateur.")
+        sys.exit(0)
+
+    os.makedirs(batch_dir, exist_ok=True)
+
+    # Écrire .current_batch
+    write_current_batch(secteur, batch_dir, _date.today().isoformat())
+    matrix_ok(f".current_batch écrit — batch actif : {batch_dir}")
+
+    return batch_dir, secteur, batch_dir
+
+
 def load_config(args) -> tuple[list[str], list[str], int, str, str | None]:
     """Retourne (villes, naf_codes, rayon, output_dir, profile_label)."""
     profile_label = None
+    profile_names: list[str] = []
 
     if args.config:
         with open(args.config, encoding="utf-8") as f:
@@ -607,20 +682,20 @@ def load_config(args) -> tuple[list[str], list[str], int, str, str | None]:
 
         # Résolution NAF : profil > profils > codes_naf > menu interactif
         if "profil" in cfg:
-            naf_codes, profile_label = _resolve_profiles([cfg["profil"]])
+            profile_names = [cfg["profil"]]
+            naf_codes, profile_label = _resolve_profiles(profile_names)
         elif "profils" in cfg:
-            naf_codes, profile_label = _resolve_profiles(cfg["profils"])
+            profile_names = cfg["profils"]
+            naf_codes, profile_label = _resolve_profiles(profile_names)
         elif "codes_naf" in cfg:
             naf_codes = cfg["codes_naf"]
         else:
             naf_codes, profile_label = interactive_profile_menu()
 
         rayon = cfg.get("rayon_km", 30)
-        output_dir = args.output  # toujours CLI, jamais le JSON
     elif args.ville:
         villes = [args.ville]
         rayon = args.rayon
-        output_dir = args.output
         if args.naf:
             naf_codes = args.naf
         else:
@@ -629,7 +704,7 @@ def load_config(args) -> tuple[list[str], list[str], int, str, str | None]:
         matrix_fail("Spécifiez --ville (+ --naf ou profil), ou --config")
         sys.exit(1)
 
-    os.makedirs(output_dir, exist_ok=True)
+    output_dir, _, _ = _resolve_batch_output(args, profile_names)
     return villes, naf_codes, rayon, output_dir, profile_label
 
 
@@ -668,6 +743,16 @@ def main():
         for naf in missing_naf:
             matrix_warn(f"Code NAF {naf} absent de la table NAF_TO_ROME — sera ignoré.")
             print(f"      Ajoutez-le à la table pour activer ce mapping.")
+
+    # Avertissements sémantiques : NAF présents mais dont le sens peut surprendre
+    semantic_alerts = [naf for naf in naf_codes if naf in NAF_SEMANTIC_WARNINGS]
+    if semantic_alerts:
+        for naf in semantic_alerts:
+            matrix_warn(NAF_SEMANTIC_WARNINGS[naf])
+        confirm = input("    Continuer quand même ? (O/n) > ").strip().lower()
+        if confirm == "n":
+            matrix_fail("Abandonné par l'utilisateur.")
+            sys.exit(0)
 
     # Résolution NAF → ROME
     rome_codes = resolve_rome_codes(naf_codes)

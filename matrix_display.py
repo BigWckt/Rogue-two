@@ -6,6 +6,7 @@ Banniere, pluie de caracteres, couleurs ANSI et citations de Morpheus.
 Partage entre les 4 scripts de prospection.
 """
 
+import os
 import random
 import shutil
 import sys
@@ -91,7 +92,7 @@ MORPHEUS_QUOTES = [
 
 
 def matrix_rain(lines: int = 7):
-    """Mini-effet pluie Matrix dans le terminal."""
+    """Mini-effet pluie Matrix dans le terminal (quelques lignes)."""
     try:
         width = min(shutil.get_terminal_size().columns, 60)
     except Exception:
@@ -99,6 +100,86 @@ def matrix_rain(lines: int = 7):
     for _ in range(lines):
         line = "".join(random.choice(MATRIX_CHARS) for _ in range(width))
         print(f"{DIM_GREEN}{line}{RESET}")
+
+
+def matrix_rain_fullscreen(duration: float = 4.0, next_title: str = ""):
+    """
+    Pluie plein écran pendant `duration` secondes, façon intro Matrix.
+    Affiche ensuite le titre du prochain script si fourni.
+    Désactivable via variable d'environnement NO_MATRIX_RAIN=1.
+    """
+    if QUIET or os.environ.get("NO_MATRIX_RAIN", "0") == "1":
+        if next_title:
+            _print_phase_title(next_title)
+        return
+
+    # Activer les ANSI codes sur Windows (PowerShell récent)
+    if os.name == "nt":
+        os.system("")
+
+    BRIGHT_GREEN = "\033[1;92m"
+    chars = _decode_chars() + "0123456789"
+
+    try:
+        size = shutil.get_terminal_size()
+        cols = size.columns
+        rows = max(size.lines - 2, 10)
+    except Exception:
+        cols, rows = 80, 24
+
+    # Effacer l'écran
+    os.system("cls" if os.name == "nt" else "clear")
+
+    density = 0.6
+    n_drops = int(cols * density)
+    drops = [random.randint(0, rows) for _ in range(n_drops)]
+    col_positions = [int(i / density) for i in range(n_drops)]
+
+    start = time.time()
+    while time.time() - start < duration:
+        # Construire la frame
+        frame: list[list[str]] = [[" "] * cols for _ in range(rows)]
+        for i, drop_row in enumerate(drops):
+            col = col_positions[i]
+            if col >= cols:
+                continue
+            # Tête de goutte (vert clair)
+            if 0 <= drop_row < rows:
+                frame[drop_row][col] = f"{BRIGHT_GREEN}{random.choice(chars)}{RESET}"
+            # Traîne (vert foncé)
+            for trail in range(1, 8):
+                r = drop_row - trail
+                if 0 <= r < rows:
+                    frame[r][col] = f"{GREEN}{random.choice(chars)}{RESET}"
+
+        # Afficher la frame en une seule écriture
+        sys.stdout.write("\033[H")
+        sys.stdout.write("\n".join("".join(row) for row in frame) + "\n")
+        sys.stdout.flush()
+
+        # Avancer les gouttes
+        drops = [
+            (d + 1) if (d + 1) < rows + 8 else random.randint(-10, 0)
+            for d in drops
+        ]
+        time.sleep(0.08)
+
+    # Nettoyer et afficher le titre de la prochaine phase
+    os.system("cls" if os.name == "nt" else "clear")
+    sys.stdout.write(RESET)
+    sys.stdout.flush()
+    if next_title:
+        _print_phase_title(next_title)
+
+
+def _print_phase_title(title: str):
+    """Affiche un titre de phase encadré après la pluie."""
+    bar = "═" * 51
+    print()
+    print(f"{GREEN}{BOLD}  {bar}{RESET}")
+    print(f"{GREEN}{BOLD}  {title:^51s}{RESET}")
+    print(f"{GREEN}{BOLD}  {bar}{RESET}")
+    print()
 
 
 def matrix_banner(script_title: str):

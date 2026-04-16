@@ -21,11 +21,13 @@ from datetime import date
 import pandas as pd
 from rapidfuzz import fuzz
 
+from batch_io import read_current_batch
 from matrix_display import (
     GREEN, RED, BOLD, RESET,
     matrix_banner, matrix_section, matrix_kv, matrix_separator,
     matrix_step, matrix_ok, matrix_fail, matrix_warn,
     morpheus_says, ask_filename, matrix_decode, set_quiet,
+    matrix_rain_fullscreen,
 )
 
 # ── Colonnes de sortie (noms HubSpot) ────────────────────────────────────────
@@ -329,6 +331,8 @@ def parse_args():
                         help="Répertoire de sortie (défaut: racine repo)")
     parser.add_argument("--quiet", action="store_true",
                         help="Mode silencieux (désactive les animations)")
+    parser.add_argument("--batch", type=str, default=None,
+                        help="Chemin de batch forcé (ex: Prosp/SB/batch_2)")
     return parser.parse_args()
 
 
@@ -343,7 +347,18 @@ def main():
         matrix_fail("Spécifiez au moins --pj ou --lba")
         sys.exit(1)
 
-    os.makedirs(args.output, exist_ok=True)
+    # Résolution du dossier de sortie : --batch > .current_batch > --output
+    if args.batch:
+        output_dir = args.batch
+    else:
+        batch = read_current_batch()
+        if batch:
+            output_dir = batch["BATCH_DIR"]
+            if not args.quiet:
+                matrix_rain_fullscreen(duration=4, next_title="PHASE 4 — CROISEMENT FINAL — LEADS QUALIFIÉS")
+        else:
+            output_dir = args.output
+    os.makedirs(output_dir, exist_ok=True)
 
     # ── Bannière Matrix ──
     matrix_banner("CROISEMENT FINAL — LEADS QUALIFIÉS")
@@ -408,7 +423,7 @@ def main():
         matrix_ok(f"Téléphones ajoutés via PJ : {phone_stats['added']}")
 
     # ── Export CSV ──
-    csv_path = os.path.join(args.output, f"{filename}.csv")
+    csv_path = os.path.join(output_dir, f"{filename}.csv")
     matrix_step("Export CSV final...")
     export_csv(leads, csv_path)
     matrix_ok(f"Fichier : {csv_path}")

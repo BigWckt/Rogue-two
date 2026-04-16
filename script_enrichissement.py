@@ -22,11 +22,13 @@ import pandas as pd
 import requests
 from rapidfuzz import fuzz
 
+from batch_io import read_current_batch
 from matrix_display import (
     GREEN, RED, BOLD, RESET,
     matrix_banner, matrix_section, matrix_kv, matrix_separator,
     matrix_step, matrix_ok, matrix_fail, matrix_warn,
     morpheus_says, ask_filename, matrix_decode, set_quiet,
+    matrix_rain_fullscreen,
 )
 
 # ── Config ────────────────────────────────────────────────────────────────────
@@ -271,6 +273,8 @@ def parse_args():
                         help="Reprendre depuis le dernier checkpoint")
     parser.add_argument("--quiet", action="store_true",
                         help="Mode silencieux (désactive les animations)")
+    parser.add_argument("--batch", type=str, default=None,
+                        help="Chemin de batch forcé (ex: Prosp/SB/batch_2)")
     return parser.parse_args()
 
 
@@ -286,7 +290,18 @@ def main():
         matrix_fail(f"Fichier introuvable : {input_file}")
         sys.exit(1)
 
-    output_dir = args.output
+    # Résolution du dossier de sortie : --batch > .current_batch > --output
+    if args.batch:
+        output_dir = args.batch
+    else:
+        batch = read_current_batch()
+        if batch:
+            output_dir = batch["BATCH_DIR"]
+            # Animation pipeline
+            if not args.quiet:
+                matrix_rain_fullscreen(duration=4, next_title="PHASE 3 — ENRICHISSEMENT SIRET")
+        else:
+            output_dir = args.output
     os.makedirs(output_dir, exist_ok=True)
 
     # ── Bannière Matrix ──

@@ -29,11 +29,13 @@ from urllib.parse import quote, urlparse
 
 import pandas as pd
 
+from batch_io import read_current_batch
 from matrix_display import (
     GREEN, RED, BOLD, RESET,
     matrix_banner, matrix_section, matrix_kv, matrix_separator,
     matrix_step, matrix_ok, matrix_fail, matrix_warn,
     morpheus_says, ask_filename, matrix_decode, set_quiet,
+    matrix_rain_fullscreen,
 )
 
 # ── User-Agent pool ──────────────────────────────────────────────────────────
@@ -481,6 +483,8 @@ def parse_args():
     parser.add_argument("--config", type=str, help="Fichier JSON de paramètres")
     parser.add_argument("--quiet", action="store_true",
                         help="Mode silencieux (désactive les animations)")
+    parser.add_argument("--batch", type=str, default=None,
+                        help="Chemin de batch forcé (ex: Prosp/SB/batch_2)")
     parser.add_argument("--proxy", type=str, default=None,
                         help="Proxy explicite (ex: http://user:pass@host:port)")
     return parser.parse_args()
@@ -510,6 +514,14 @@ def load_config(args) -> tuple[list[str], str, int, str]:
         matrix_fail("Spécifiez --ville et --activite, ou --config")
         sys.exit(1)
 
+    # --batch > .current_batch > --output
+    if args.batch:
+        output_dir = args.batch
+    else:
+        batch = read_current_batch()
+        if batch:
+            output_dir = batch["BATCH_DIR"]
+            matrix_ok(f"Batch actif détecté : {output_dir} ({batch.get('SECTEUR','')})")
     os.makedirs(output_dir, exist_ok=True)
     return villes, activite, nb_max, output_dir
 
@@ -522,6 +534,10 @@ def main():
         set_quiet(True)
     villes, activite, nb_max, output_dir = load_config(args)
     multi = len(villes) > 1
+
+    # ── Animation pipeline (si batch actif) ──
+    if read_current_batch() and not args.quiet:
+        matrix_rain_fullscreen(duration=4, next_title="PHASE 2 — SCRAPING PAGES JAUNES")
 
     # ── Bannière Matrix ──
     matrix_banner("SCRAPING PAGES JAUNES")

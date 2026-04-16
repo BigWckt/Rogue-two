@@ -479,3 +479,36 @@ Ajout d'un effet visuel "Matrix decode" : quand un nom d'entreprise est collect�
 
 ### État final
 **Fonctionnel** ✅
+
+---
+
+## 2026-04-15 — Trois améliorations pipeline
+
+### 1. Profil mbt_restaurants élargi + avertissement sémantique 50.10A
+
+- `mbt_restaurants` passe de `["56.10A"]` à `["56.10A", "50.10A"]`
+- `NAF_TO_ROME` : ajout de `"50.10A": ["G1204"]`
+- `NAF_SEMANTIC_WARNINGS` : nouveau dict de codes NAF dont le sens peut surprendre
+  - 50.10A : "Transports maritimes et côtiers de passagers" (pas "Restaurant") — ajouté à la demande explicite
+- À chaque run utilisant un NAF listé dans `NAF_SEMANTIC_WARNINGS`, le script affiche un warning et demande confirmation interactive
+
+### 2. Animation pluie plein écran entre étapes pipeline (`matrix_rain_fullscreen`)
+
+- `matrix_display.py` : nouvelle fonction `matrix_rain_fullscreen(duration=4, next_title="")` :
+  - Efface l'écran, pluie animée frame-par-frame avec gouttes/traînes
+  - Activation ANSI Windows via `os.system("")`
+  - Après la pluie : titre de la prochaine phase dans un cadre `═══`
+  - Désactivable via `NO_MATRIX_RAIN=1` ou `--quiet`
+- Déclenchée automatiquement dans les scripts 2/3/4 quand `.current_batch` est détecté :
+  - PJ → "PHASE 2", enrichissement → "PHASE 3", comparaison → "PHASE 4"
+
+### 3. Organisation automatique par secteur / batch (`batch_io.py`)
+
+Nouveau module `batch_io.py` : `detect_secteur`, `find_prosp_root`, `next_batch_number`, `write_current_batch`, `read_current_batch`
+
+**script_lba_lbb.py** : `_resolve_batch_output()` — détecte secteur, cherche `Prosp/`, numérote `batch_N`, confirme avec l'utilisateur, crée le dossier, écrit `.current_batch`
+
+**scripts 2/3/4** : lisent `.current_batch` pour l'output dir, `--batch` CLI pour forcer un chemin, rain animée si batch détecté
+
+### État final
+**Fonctionnel** ✅
