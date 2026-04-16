@@ -512,3 +512,53 @@ Nouveau module `batch_io.py` : `detect_secteur`, `find_prosp_root`, `next_batch_
 
 ### État final
 **Fonctionnel** ✅
+
+---
+
+## 2026-04-16 — Nom de batch personnalisable + pluie entre étapes pipeline
+
+### 1. Nom du dossier de batch personnalisable (`script_lba_lbb.py`)
+
+`_resolve_batch_output()` demande maintenant le nom du dossier de sortie au lieu d'imposer `batch_N` :
+```
+Secteur détecté : SB
+Dossier parent  : Prosp/SB/
+Nom du dossier de sortie (défaut: batch_3) : Batch 2 _ S02 Avril
+```
+- Si l'utilisateur tape un nom → crée `Prosp/SB/Batch 2 _ S02 Avril/`
+- Si Entrée sans rien → garde `batch_N` auto-incrémenté
+- Mode `--config` : clé optionnelle `"batch_name"` dans le JSON config
+- Le nom personnalisé se propage dans `.current_batch` → scripts 2/3/4 écrivent au bon endroit
+
+### 2. Pluie de katakana déplacée entre les étapes pipeline
+
+**Avant** : chaque script (PJ, enrichissement, croisement) déclenchait `matrix_rain_fullscreen()` à son propre lancement quand `.current_batch` était détecté. Problème : la pluie apparaissait au début d'une étape, pas entre deux étapes.
+
+**Après** : la pluie est déclenchée par le script appelant juste avant de lancer le script suivant via `subprocess.run()` :
+- `script_pages_jaunes.py` → pluie → `script_enrichissement.py`
+- `script_enrichissement.py` → pluie → `script_comparaison.py`
+
+Supprimé toute animation au lancement individuel de chaque script.
+
+**Enchaînement pipeline** (menu interactif fin de `script_pages_jaunes.py`) :
+```
+Enchaînement pipeline
+  1. Enrichissement SIRET + Croisement
+  2. Enrichissement SIRET seulement
+  3. Terminer
+
+  Choix : 1
+  [PLUIE DE KATAKANA — 4s]
+  PHASE 2 — ENRICHISSEMENT SIRET
+  [enrichissement...]
+  [PLUIE DE KATAKANA — 4s]
+  PHASE 3 — CROISEMENT FINAL
+  [croisement...]
+```
+
+- Flag `--chain` sur `script_enrichissement.py` : auto-chaîne vers croisement (détecte `lba_lbb_*.csv` dans le batch dir)
+- Menu uniquement si `.current_batch` actif et `--quiet` non activé
+- Scripts lancés individuellement : aucune animation, aucun enchaînement
+
+### État final
+**Fonctionnel** ✅

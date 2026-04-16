@@ -605,7 +605,7 @@ def interactive_profile_menu() -> tuple[list[str], str]:
     return _resolve_profiles(selected)
 
 
-def _resolve_batch_output(args, profile_names: list[str]) -> tuple[str, str | None, str | None]:
+def _resolve_batch_output(args, profile_names: list[str], batch_name: str | None = None) -> tuple[str, str | None, str | None]:
     """
     Détermine le dossier de sortie batch.
     Retourne (output_dir, secteur, batch_path).
@@ -643,17 +643,21 @@ def _resolve_batch_output(args, profile_names: list[str]) -> tuple[str, str | No
         matrix_warn("Dossier Prosp/ introuvable — création dans le dossier courant.")
         secteur_dir = os.path.join(".", secteur)
 
-    # Numéro de batch
+    # Numéro de batch + nom personnalisable
     n = next_batch_number(secteur_dir)
-    batch_dir = os.path.join(secteur_dir, f"batch_{n}")
+    default_batch_name = f"batch_{n}"
 
-    # Confirmation
     print(f"\n    {GREEN}▸{RESET} Secteur détecté : {BOLD}{secteur}{RESET}")
-    print(f"    {GREEN}▸{RESET} Dossier de sortie : {BOLD}{batch_dir}/{RESET}")
-    confirm = input("    Créer ce dossier ? (O/n) > ").strip().lower()
-    if confirm == "n":
-        matrix_fail("Abandonné par l'utilisateur.")
-        sys.exit(0)
+    print(f"    {GREEN}▸{RESET} Dossier parent  : {BOLD}{secteur_dir}/{RESET}")
+
+    if batch_name:
+        dir_name = batch_name
+        matrix_ok(f"Nom de batch (config) : {dir_name}")
+    else:
+        raw = input(f"    {GREEN}▸{RESET} Nom du dossier de sortie (défaut: {default_batch_name}) : ").strip()
+        dir_name = raw if raw else default_batch_name
+
+    batch_dir = os.path.join(secteur_dir, dir_name)
 
     os.makedirs(batch_dir, exist_ok=True)
 
@@ -754,6 +758,7 @@ def load_config(args) -> tuple[list[str], list[str], int, str, str | None]:
     """Retourne (villes, naf_codes, rayon, output_dir, profile_label)."""
     profile_label = None
     profile_names: list[str] = []
+    batch_name = None
 
     if args.config:
         with open(args.config, encoding="utf-8") as f:
@@ -779,6 +784,7 @@ def load_config(args) -> tuple[list[str], list[str], int, str, str | None]:
             naf_codes, profile_label = interactive_profile_menu()
 
         rayon = cfg.get("rayon_km", 30)
+        batch_name = cfg.get("batch_name")
     elif args.ville:
         villes = [args.ville]
         rayon = args.rayon
@@ -790,7 +796,7 @@ def load_config(args) -> tuple[list[str], list[str], int, str, str | None]:
         matrix_fail("Spécifiez --ville (+ --naf ou profil), ou --config")
         sys.exit(1)
 
-    output_dir, _, _ = _resolve_batch_output(args, profile_names)
+    output_dir, _, _ = _resolve_batch_output(args, profile_names, batch_name=batch_name)
     return villes, naf_codes, rayon, output_dir, profile_label
 
 

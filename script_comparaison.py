@@ -354,8 +354,6 @@ def main():
         batch = read_current_batch()
         if batch:
             output_dir = batch["BATCH_DIR"]
-            if not args.quiet:
-                matrix_rain_fullscreen(duration=4, next_title="PHASE 4 — CROISEMENT FINAL — LEADS QUALIFIÉS")
         else:
             output_dir = args.output
     os.makedirs(output_dir, exist_ok=True)

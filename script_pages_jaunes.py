@@ -21,6 +21,7 @@ import json
 import os
 import random
 import re
+import subprocess
 import sys
 import time
 import unicodedata
@@ -589,10 +590,6 @@ def main():
 
     multi = len(villes) > 1
 
-    # ── Animation pipeline (si batch actif) ──
-    if read_current_batch() and not args.quiet:
-        matrix_rain_fullscreen(duration=4, next_title="PHASE 2 — SCRAPING PAGES JAUNES")
-
     # ── Bannière Matrix ──
     matrix_banner("SCRAPING PAGES JAUNES")
 
@@ -719,6 +716,26 @@ def main():
 
     # ── Clôture Matrix ──
     morpheus_says()
+
+    # ── Enchaînement pipeline ──
+    batch = read_current_batch()
+    if batch and not args.quiet:
+        print()
+        matrix_section("Enchaînement pipeline")
+        print(f"    {GREEN}1.{RESET} Enrichissement SIRET + Croisement")
+        print(f"    {GREEN}2.{RESET} Enrichissement SIRET seulement")
+        print(f"    {GREEN}3.{RESET} Terminer")
+        print()
+        choice = input(f"    {GREEN}▸{RESET} Choix : ").strip()
+
+        if choice in ("1", "2"):
+            script_dir = os.path.dirname(os.path.abspath(__file__))
+            matrix_rain_fullscreen(duration=4, next_title="PHASE 2 — ENRICHISSEMENT SIRET")
+            cmd = [sys.executable, os.path.join(script_dir, "script_enrichissement.py"),
+                   "--input", csv_path]
+            if choice == "1":
+                cmd.append("--chain")
+            subprocess.run(cmd)
 
 
 if __name__ == "__main__":

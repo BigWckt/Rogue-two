@@ -14,6 +14,8 @@ Usage :
 import argparse
 import os
 import re
+import glob
+import subprocess
 import sys
 import time
 from datetime import date
@@ -275,6 +277,8 @@ def parse_args():
                         help="Mode silencieux (désactive les animations)")
     parser.add_argument("--batch", type=str, default=None,
                         help="Chemin de batch forcé (ex: Prosp/SB/batch_2)")
+    parser.add_argument("--chain", action="store_true",
+                        help="Enchaîner automatiquement avec le croisement final")
     return parser.parse_args()
 
 
@@ -297,9 +301,6 @@ def main():
         batch = read_current_batch()
         if batch:
             output_dir = batch["BATCH_DIR"]
-            # Animation pipeline
-            if not args.quiet:
-                matrix_rain_fullscreen(duration=4, next_title="PHASE 3 — ENRICHISSEMENT SIRET")
         else:
             output_dir = args.output
     os.makedirs(output_dir, exist_ok=True)
@@ -403,6 +404,21 @@ def main():
 
     # ── Clôture Matrix ──
     morpheus_says()
+
+    # ── Enchaînement pipeline vers croisement ──
+    if args.chain:
+        lba_files = [f for f in glob.glob(os.path.join(output_dir, "lba_lbb_*.csv"))
+                     if not f.endswith("_backup.csv")]
+        if lba_files:
+            lba_file = max(lba_files, key=os.path.getmtime)
+            if not args.quiet:
+                matrix_rain_fullscreen(duration=4, next_title="PHASE 3 — CROISEMENT FINAL")
+            script_dir = os.path.dirname(os.path.abspath(__file__))
+            cmd = [sys.executable, os.path.join(script_dir, "script_comparaison.py"),
+                   "--pj", csv_path, "--lba", lba_file]
+            subprocess.run(cmd)
+        else:
+            matrix_warn("Aucun fichier LBA/LBB trouvé dans le batch — croisement impossible")
 
 
 if __name__ == "__main__":
