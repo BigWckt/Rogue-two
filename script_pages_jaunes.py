@@ -490,6 +490,55 @@ def parse_args():
     return parser.parse_args()
 
 
+def interactive_menu(args) -> tuple[list[str], str, int, str, str | None]:
+    """
+    Mode interactif complet (aucun argument CLI).
+    Retourne (villes, activite, nb_max, output_dir, output_name).
+    """
+    print()
+    matrix_section("Configuration interactive")
+
+    # 1. Villes
+    raw = input(f"    {GREEN}▸{RESET} Ville(s) (séparées par virgules) : ").strip()
+    if not raw:
+        matrix_fail("Aucune ville saisie")
+        sys.exit(1)
+    villes = [v.strip() for v in raw.split(",") if v.strip()]
+
+    # 2. Mot-clé de recherche
+    activite = input(f"    {GREEN}▸{RESET} Mot-clé de recherche (ex: boulangerie, plombier) : ").strip()
+    if not activite:
+        matrix_fail("Aucun mot-clé saisi")
+        sys.exit(1)
+
+    # 3. Nombre max de fiches
+    raw = input(f"    {GREEN}▸{RESET} Nombre max de fiches par ville (défaut 100) : ").strip()
+    nb_max = 100
+    if raw:
+        try:
+            nb_max = int(raw)
+        except ValueError:
+            matrix_warn(f"Valeur invalide « {raw} » — défaut 100")
+
+    # 4. Nom de fichier
+    raw = input(f"    {GREEN}▸{RESET} Nom du fichier de sortie (sans extension) [défaut: auto] : ").strip()
+    output_name = raw if raw else None
+
+    # 5. Résolution output dir
+    if args.batch:
+        output_dir = args.batch
+    else:
+        batch = read_current_batch()
+        if batch:
+            output_dir = batch["BATCH_DIR"]
+            matrix_ok(f"Batch actif détecté : {output_dir} ({batch.get('SECTEUR', '')})")
+        else:
+            output_dir = args.output
+    os.makedirs(output_dir, exist_ok=True)
+
+    return villes, activite, nb_max, output_dir, output_name
+
+
 def load_config(args) -> tuple[list[str], str, int, str]:
     """Retourne (villes, activite, nb_max, output_dir)."""
     if args.config:
@@ -532,7 +581,12 @@ def main():
     args = parse_args()
     if args.quiet:
         set_quiet(True)
-    villes, activite, nb_max, output_dir = load_config(args)
+    if not args.config and not args.ville:
+        villes, activite, nb_max, output_dir, output_name = interactive_menu(args)
+    else:
+        villes, activite, nb_max, output_dir = load_config(args)
+        output_name = None
+
     multi = len(villes) > 1
 
     # ── Animation pipeline (si batch actif) ──
@@ -546,14 +600,17 @@ def main():
     matrix_kv("Activité", activite)
     matrix_kv("Max fiches/ville", str(nb_max))
 
-    # ── Nom de fichier interactif ──
+    # ── Nom de fichier ──
     today_str = date.today().strftime("%Y%m%d")
-    if multi:
-        default_name = f"pj_results_multi_{today_str}"
+    if output_name:
+        filename = output_name
     else:
-        ville_slug = villes[0].lower().replace(" ", "_").replace("-", "_")
-        default_name = f"pj_results_{ville_slug}_{today_str}"
-    filename = ask_filename(default_name)
+        if multi:
+            default_name = f"pj_results_multi_{today_str}"
+        else:
+            ville_slug = villes[0].lower().replace(" ", "_").replace("-", "_")
+            default_name = f"pj_results_{ville_slug}_{today_str}"
+        filename = ask_filename(default_name)
 
     # ── Boucle sur les villes ──
     all_city_results: dict[str, list[dict]] = {}

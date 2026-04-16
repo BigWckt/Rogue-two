@@ -664,6 +664,92 @@ def _resolve_batch_output(args, profile_names: list[str]) -> tuple[str, str | No
     return batch_dir, secteur, batch_dir
 
 
+def interactive_menu(args) -> tuple[list[str], list[str], int, str, str | None, str | None]:
+    """
+    Mode interactif complet (aucun argument CLI).
+    Retourne (villes, naf_codes, rayon, output_dir, profile_label, output_name).
+    """
+    print()
+    matrix_section("Configuration interactive")
+
+    # 1. Villes
+    raw = input(f"    {GREEN}▸{RESET} Ville(s) (séparées par virgules) : ").strip()
+    if not raw:
+        matrix_fail("Aucune ville saisie")
+        sys.exit(1)
+    villes = [v.strip() for v in raw.split(",") if v.strip()]
+
+    # 2. Rayon
+    raw = input(f"    {GREEN}▸{RESET} Rayon (km) [10, 30, 60, 100] (défaut 30) : ").strip()
+    rayon = 30
+    if raw:
+        try:
+            rayon = int(raw)
+        except ValueError:
+            matrix_warn(f"Rayon invalide « {raw} » — défaut 30 km")
+
+    # 3. Profils groupés par secteur
+    print()
+    matrix_section("Sélection du profil sectoriel Skill & You")
+
+    sectors_order = ["SB", "BTPM", "MBT", "TG"]
+    sector_groups: dict[str, list[str]] = {s: [] for s in sectors_order}
+    for name in sorted(PROFILS_SKY.keys()):
+        for prefix, label in SECTEUR_PREFIXES.items():
+            if name.lower().startswith(f"{prefix}_"):
+                sector_groups[label].append(name)
+                break
+
+    idx = 1
+    idx_map: dict[int, str] = {}
+    for sector in sectors_order:
+        profiles = sector_groups[sector]
+        if not profiles:
+            continue
+        print(f"\n    {BOLD}── {sector} ──{RESET}")
+        for name in profiles:
+            naf_list = PROFILS_SKY[name]
+            print(f"    {GREEN}{idx:>2}.{RESET} {name:<30s} ({len(naf_list)} codes NAF)")
+            idx_map[idx] = name
+            idx += 1
+
+    print()
+    raw = input(f"    {GREEN}▸{RESET} Choix du/des profils (numéros séparés par virgules) : ").strip()
+    if not raw:
+        matrix_fail("Aucun profil sélectionné")
+        sys.exit(1)
+
+    selected: list[str] = []
+    for part in raw.split(","):
+        part = part.strip()
+        try:
+            i = int(part)
+            if i in idx_map:
+                selected.append(idx_map[i])
+            else:
+                matrix_fail(f"Numéro hors limites : {part}")
+                sys.exit(1)
+        except ValueError:
+            if part in PROFILS_SKY:
+                selected.append(part)
+            else:
+                matrix_fail(f"Profil inconnu : « {part} »")
+                sys.exit(1)
+
+    naf_codes, profile_label = _resolve_profiles(selected)
+    matrix_ok(f"Profil(s) : {profile_label}")
+    matrix_ok(f"NAF : {', '.join(naf_codes)}")
+
+    # 4. Nom de fichier
+    raw = input(f"\n    {GREEN}▸{RESET} Nom du fichier de sortie (sans extension) [défaut: auto] : ").strip()
+    output_name = raw if raw else None
+
+    # 5. Résolution batch
+    output_dir, _, _ = _resolve_batch_output(args, selected)
+
+    return villes, naf_codes, rayon, output_dir, profile_label, output_name
+
+
 def load_config(args) -> tuple[list[str], list[str], int, str, str | None]:
     """Retourne (villes, naf_codes, rayon, output_dir, profile_label)."""
     profile_label = None
@@ -714,7 +800,12 @@ def main():
     args = parse_args()
     if args.quiet:
         set_quiet(True)
-    villes, naf_codes, rayon, output_dir, profile_label = load_config(args)
+    if not args.config and not args.ville:
+        villes, naf_codes, rayon, output_dir, profile_label, output_name = interactive_menu(args)
+    else:
+        villes, naf_codes, rayon, output_dir, profile_label = load_config(args)
+        output_name = None
+
     multi = len(villes) > 1
 
     # ── Bannière Matrix ──
@@ -727,14 +818,17 @@ def main():
     matrix_kv("Codes NAF", ", ".join(naf_codes))
     matrix_kv("Rayon", f"{rayon} km")
 
-    # ── Nom de fichier interactif ──
+    # ── Nom de fichier ──
     today_str = date.today().strftime("%Y%m%d")
-    if multi:
-        default_name = f"lba_lbb_results_multi_{today_str}"
+    if output_name:
+        filename = output_name
     else:
-        ville_slug = villes[0].lower().replace(" ", "_").replace("-", "_")
-        default_name = f"lba_lbb_results_{ville_slug}_{today_str}"
-    filename = ask_filename(default_name)
+        if multi:
+            default_name = f"lba_lbb_results_multi_{today_str}"
+        else:
+            ville_slug = villes[0].lower().replace(" ", "_").replace("-", "_")
+            default_name = f"lba_lbb_results_{ville_slug}_{today_str}"
+        filename = ask_filename(default_name)
 
     # ── Vérification de cohérence NAF → ROME ──
     matrix_section("Vérification NAF → ROME")
