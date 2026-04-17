@@ -562,3 +562,61 @@ Enchaînement pipeline
 
 ### État final
 **Fonctionnel** ✅
+
+---
+
+## 2026-04-17 — Filtre de cohérence NAF dans le pipeline
+
+### Problème
+Quand on scrape "cabinet médical" sur Pages Jaunes, on récupère parfois des pharmacies (47.73Z), vétérinaires (75.00Z) ou autres établissements hors périmètre. L'enrichissement SIRET retourne le code NAF officiel INSEE — on peut l'utiliser pour détecter et exclure ces faux positifs.
+
+### 1. Propagation du profil NAF dans `.current_batch`
+
+**`batch_io.py`** : `write_current_batch()` accepte maintenant `profils` et `naf_attendus` :
+```
+SECTEUR=SB
+BATCH_DIR=Prosp/SB/batch_3
+DATE=2026-04-17
+PROFILS=sb_sante
+NAF_ATTENDUS=86.10A,86.10Z,86.21Z,86.22A,86.22B,86.22C,86.23Z,86.90B
+```
+
+**`script_lba_lbb.py`** : `_resolve_batch_output()` transmet les profils et codes NAF à `write_current_batch()` (mode interactif + mode `--config`).
+
+### 2. `check_naf_coherence()` — fonction partagée (`batch_io.py`)
+
+Comparaison souple en 2 étapes :
+1. Match exact (ex: `86.10A` == `86.10A`) → OK
+2. Match sur préfixe 4 caractères (ex: `86.10B` matche `86.10A` via préfixe `86.1`) → OK
+3. Aucun match → exclusion
+
+NAF vide (non retourné par l'API) → bénéfice du doute, conservé.
+Pas de `NAF_ATTENDUS` dans `.current_batch` → filtre désactivé (rétrocompatible).
+
+### 3. Filtre dans `script_enrichissement.py`
+
+Après enrichissement de toutes les entreprises et avant export CSV :
+- Lit `NAF_ATTENDUS` depuis `.current_batch`
+- Pour chaque entreprise avec SIRET trouvé : vérifie si le code NAF retourné par SIRENE est cohérent avec le profil
+- Si hors profil → `Statut enrichissement = "Exclu — NAF hors profil (47.73Z)"`
+
+Statistiques console :
+```
+Filtre cohérence NAF
+  NAF cohérent avec le profil  : 89
+  NAF hors profil (exclus)     : 23
+    dont : 47.73Z ×8
+    dont : 75.00Z ×4
+  NAF non disponible (conservés): 5
+```
+
+### 4. Filtre dans `script_comparaison.py`
+
+Avant le croisement par SIRET :
+- Lit `NAF_ATTENDUS` depuis `.current_batch`
+- Filtre les entrées LBA/LBB et PJ dont le NAF est hors profil
+- Les exclut du merge (elles ne se retrouvent pas dans le fichier final)
+- Log le nombre d'exclusions par source (LBA/LBB vs PJ)
+
+### État final
+**Fonctionnel** ✅

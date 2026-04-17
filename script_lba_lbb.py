@@ -605,7 +605,8 @@ def interactive_profile_menu() -> tuple[list[str], str]:
     return _resolve_profiles(selected)
 
 
-def _resolve_batch_output(args, profile_names: list[str], batch_name: str | None = None) -> tuple[str, str | None, str | None]:
+def _resolve_batch_output(args, profile_names: list[str], batch_name: str | None = None,
+                          naf_codes: list[str] | None = None) -> tuple[str, str | None, str | None]:
     """
     Détermine le dossier de sortie batch.
     Retourne (output_dir, secteur, batch_path).
@@ -661,8 +662,11 @@ def _resolve_batch_output(args, profile_names: list[str], batch_name: str | None
 
     os.makedirs(batch_dir, exist_ok=True)
 
-    # Écrire .current_batch
-    write_current_batch(secteur, batch_dir, _date.today().isoformat())
+    # Écrire .current_batch (avec profils et NAF attendus)
+    profils_str = ",".join(profile_names) if profile_names else ""
+    naf_str = ",".join(naf_codes) if naf_codes else ""
+    write_current_batch(secteur, batch_dir, _date.today().isoformat(),
+                        profils=profils_str, naf_attendus=naf_str)
     matrix_ok(f".current_batch écrit — batch actif : {batch_dir}")
 
     return batch_dir, secteur, batch_dir
@@ -749,7 +753,7 @@ def interactive_menu(args) -> tuple[list[str], list[str], int, str, str | None, 
     output_name = raw if raw else None
 
     # 5. Résolution batch
-    output_dir, _, _ = _resolve_batch_output(args, selected)
+    output_dir, _, _ = _resolve_batch_output(args, selected, naf_codes=naf_codes)
 
     return villes, naf_codes, rayon, output_dir, profile_label, output_name
 
@@ -796,7 +800,8 @@ def load_config(args) -> tuple[list[str], list[str], int, str, str | None]:
         matrix_fail("Spécifiez --ville (+ --naf ou profil), ou --config")
         sys.exit(1)
 
-    output_dir, _, _ = _resolve_batch_output(args, profile_names, batch_name=batch_name)
+    output_dir, _, _ = _resolve_batch_output(args, profile_names, batch_name=batch_name,
+                                             naf_codes=naf_codes)
     return villes, naf_codes, rayon, output_dir, profile_label
 
 

@@ -24,7 +24,7 @@ import pandas as pd
 import requests
 from rapidfuzz import fuzz
 
-from batch_io import read_current_batch
+from batch_io import read_current_batch, check_naf_coherence
 from matrix_display import (
     GREEN, RED, BOLD, RESET,
     matrix_banner, matrix_section, matrix_kv, matrix_separator,
@@ -378,6 +378,35 @@ def main():
 
     # Sauvegarde finale
     save_checkpoint(enriched_rows, checkpoint_path)
+
+    # ── Filtre cohérence NAF ──
+    batch_info = read_current_batch()
+    naf_attendus_str = (batch_info or {}).get("NAF_ATTENDUS", "")
+    naf_attendus = [n.strip() for n in naf_attendus_str.split(",") if n.strip()] if naf_attendus_str else []
+    naf_stats = {"coherent": 0, "hors_profil": 0, "indisponible": 0, "detail": {}}
+
+    if naf_attendus:
+        matrix_section("Filtre cohérence NAF")
+        for row in enriched_rows:
+            if row.get("Statut enrichissement") != "SIRET trouvé":
+                continue
+            naf = row.get("Code NAF", "").strip()
+            if not naf:
+                naf_stats["indisponible"] += 1
+                continue
+            if check_naf_coherence(naf, naf_attendus):
+                naf_stats["coherent"] += 1
+            else:
+                naf_stats["hors_profil"] += 1
+                naf_stats["detail"][naf] = naf_stats["detail"].get(naf, 0) + 1
+                row["Statut enrichissement"] = f"Exclu — NAF hors profil ({naf})"
+
+        matrix_kv("NAF cohérent avec le profil", str(naf_stats["coherent"]))
+        matrix_kv("NAF hors profil (exclus)", str(naf_stats["hors_profil"]))
+        if naf_stats["detail"]:
+            for naf_code, cnt in sorted(naf_stats["detail"].items(), key=lambda x: -x[1]):
+                print(f"      dont : {naf_code} ×{cnt}")
+        matrix_kv("NAF non disponible (conservés)", str(naf_stats["indisponible"]))
 
     # ── Export CSV ──
     matrix_section("Export des données décryptées")

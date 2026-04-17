@@ -21,7 +21,7 @@ from datetime import date
 import pandas as pd
 from rapidfuzz import fuzz
 
-from batch_io import read_current_batch
+from batch_io import read_current_batch, check_naf_coherence
 from matrix_display import (
     GREEN, RED, BOLD, RESET,
     matrix_banner, matrix_section, matrix_kv, matrix_separator,
@@ -404,6 +404,35 @@ def main():
 
     default_name = f"leads_qualifies_{ville}_{today_str}"
     filename = ask_filename(default_name)
+
+    # ── Filtre cohérence NAF ──
+    batch_info = read_current_batch()
+    naf_attendus_str = (batch_info or {}).get("NAF_ATTENDUS", "")
+    naf_attendus = [n.strip() for n in naf_attendus_str.split(",") if n.strip()] if naf_attendus_str else []
+    naf_filter_stats = {"lba_excluded": 0, "pj_excluded": 0, "detail": {}}
+
+    if naf_attendus:
+        for siret in list(lba_data.keys()):
+            naf = lba_data[siret].get("Code NAF", "").strip()
+            if naf and not check_naf_coherence(naf, naf_attendus):
+                naf_filter_stats["lba_excluded"] += 1
+                naf_filter_stats["detail"][naf] = naf_filter_stats["detail"].get(naf, 0) + 1
+                del lba_data[siret]
+
+        for siret in list(pj_data.keys()):
+            naf = pj_data[siret].get("Code NAF", "").strip()
+            if naf and not check_naf_coherence(naf, naf_attendus):
+                naf_filter_stats["pj_excluded"] += 1
+                naf_filter_stats["detail"][naf] = naf_filter_stats["detail"].get(naf, 0) + 1
+                del pj_data[siret]
+
+        total_excluded = naf_filter_stats["lba_excluded"] + naf_filter_stats["pj_excluded"]
+        if total_excluded:
+            matrix_section("Filtre cohérence NAF")
+            matrix_kv("LBA/LBB exclus (NAF hors profil)", str(naf_filter_stats["lba_excluded"]))
+            matrix_kv("PJ exclus (NAF hors profil)", str(naf_filter_stats["pj_excluded"]))
+            for naf_code, cnt in sorted(naf_filter_stats["detail"].items(), key=lambda x: -x[1]):
+                print(f"      dont : {naf_code} ×{cnt}")
 
     # ── Étape 1 : Croisement par SIRET ──
     matrix_section("Étape 1 — Croisement par SIRET")

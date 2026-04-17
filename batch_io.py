@@ -67,13 +67,18 @@ def next_batch_number(secteur_dir: str) -> int:
 # ── Lecture / écriture de .current_batch ─────────────────────────────────────
 
 def write_current_batch(secteur: str, batch_dir: str, date_str: str,
-                        root: str = "."):
+                        root: str = ".", profils: str = "",
+                        naf_attendus: str = ""):
     """Écrit le fichier .current_batch à la racine fournie."""
     path = os.path.join(root, CURRENT_BATCH_FILE)
     with open(path, "w", encoding="utf-8") as f:
         f.write(f"SECTEUR={secteur}\n")
         f.write(f"BATCH_DIR={batch_dir}\n")
         f.write(f"DATE={date_str}\n")
+        if profils:
+            f.write(f"PROFILS={profils}\n")
+        if naf_attendus:
+            f.write(f"NAF_ATTENDUS={naf_attendus}\n")
     return path
 
 
@@ -100,3 +105,21 @@ def read_current_batch(root: str = ".") -> dict | None:
             break
         current = parent
     return None
+
+
+def check_naf_coherence(naf: str, naf_attendus: list[str]) -> bool:
+    """
+    Vérifie si un NAF est cohérent avec la liste attendue.
+    Match exact d'abord, puis match sur préfixe 4 caractères (avant la lettre).
+    Retourne True si cohérent, False si hors profil.
+    """
+    if not naf or not naf_attendus:
+        return True
+    naf = naf.strip()
+    if naf in naf_attendus:
+        return True
+    naf_prefix = naf[:4] if len(naf) >= 4 else naf
+    for attendu in naf_attendus:
+        if attendu[:4] == naf_prefix:
+            return True
+    return False
