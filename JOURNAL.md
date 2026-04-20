@@ -565,6 +565,64 @@ Enchaînement pipeline
 
 ---
 
+## 2026-04-20 — script_enrichissement_pappers.py + Déduplication renforcée
+
+### 1. Nouveau script : `script_enrichissement_pappers.py` (expérimental)
+
+Script d'enrichissement via l'API Pappers (https://api.pappers.fr/v2) en complément/alternative à l'API SIRENE.
+
+**Fonctionnalités :**
+- Clé API lue depuis `PAPPERS_API_KEY` (jamais en dur)
+- Recherche par SIRET direct (`/v2/entreprise?siret=...`) si SIRET existant
+- Recherche par nom + code postal (`/v2/recherche?q=...&code_postal=...`) sinon
+- Matching fuzzy (rapidfuzz, seuil 80%) sur les noms retournés
+- Données extraites : SIRET, SIREN, Code NAF, Effectifs, Dirigeant, Chiffre d'affaires, Date de création, Forme juridique
+- Mode `--compare` : compare SIRENE vs Pappers sur un fichier déjà enrichi (récap divergences)
+- Checkpoint CSV toutes les 25 entreprises + `--resume`
+- Délai 0.5s entre appels, retry 2× sur erreur réseau
+- Intégration batch (`.current_batch`)
+- Thème Matrix
+- Mise à jour automatique JOURNAL.md en fin d'exécution
+
+**Mode compare :** produit un récap avec SIRET identiques / différents / trouvés par un seul / non trouvés.
+
+**Objectif :** évaluer si la licence Pappers (expiration prochaine) apporte un gain significatif par rapport à SIRENE (effectifs, dirigeant, CA sont des données non disponibles via recherche-entreprises.api.gouv.fr).
+
+### 2. Déduplication renforcée dans `script_comparaison.py`
+
+Bug de doublons à l'import HubSpot : plusieurs tâches créées pour la même entreprise, surtout sur les villes multi-arrondissements (Paris). Ajout d'une déduplication en 3 étapes après le croisement PJ ↔ LBA/LBB.
+
+**Étape 1 — Dédup par SIRET :**
+- Si deux lignes+ ont le même SIRET non-vide → garder celle avec téléphone, meilleure priorité, plus de champs remplis
+- Fusion des infos manquantes de la ligne supprimée vers la ligne gardée
+
+**Étape 2 — Dédup par téléphone :**
+- Normalisation sur 9 chiffres (sans le 0 initial)
+- Ne fusionner que si le nom est aussi similaire à ≥ 70% (fuzzy) — évite les faux positifs (centres d'affaires)
+- Même logique de priorité
+
+**Étape 3 — Dédup par nom fuzzy + proximité géographique :**
+- Normalisation des noms : minuscules, sans accents, suppression de SARL/SAS/EURL/SCI/SASU/EI/SELARL/CABINET/AGENCE/SOCIETE/STE
+- `fuzz.token_sort_ratio` entre tous les noms du même département (2 premiers chiffres du CP)
+- Seuil ≥ 90% → doublon probable → fusion
+- Logging détaillé pour audit : `"Cabinet Martin" (75009) ≈ "CABINET MARTIN SARL" (75008) → fusionné (94%)`
+
+**Récap console :**
+```
+[+] Déduplication renforcée :
+    - Doublons SIRET          : N lignes fusionnées
+    - Doublons téléphone      : N lignes fusionnées
+    - Doublons nom fuzzy      : N lignes fusionnées
+    ──────────────────────────────────────────
+    Total supprimé            : N lignes
+    Leads uniques restants    : N
+```
+
+### État final
+**Fonctionnel** ✅
+
+---
+
 ## 2026-04-17 — Filtre de cohérence NAF dans le pipeline
 
 ### Problème

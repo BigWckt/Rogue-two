@@ -87,6 +87,8 @@ def clean_name(name: str) -> str:
 
 
 PHONE_FALLBACK_THRESHOLD = 85
+DEDUP_PHONE_NAME_THRESHOLD = 70
+DEDUP_FUZZY_NAME_THRESHOLD = 90
 
 
 def load_lba_lbb(filepath: str) -> dict[str, dict]:
@@ -193,6 +195,202 @@ def enrich_phones_fallback(leads: list[dict], pj_fiches: list[dict]) -> dict:
             stats["missing"] += 1
 
     return stats
+
+
+# ── Déduplication renforcée ───────────────────────────────────────────────────
+
+def _normalize_phone_9(raw: str) -> str:
+    """Normalise un téléphone sur 9 chiffres (sans le 0 initial)."""
+    digits = re.sub(r"\D", "", str(raw).strip())
+    if digits.startswith("33") and len(digits) >= 11:
+        digits = "0" + digits[2:]
+    if digits.startswith("0") and len(digits) == 10:
+        return digits[1:]
+    return ""
+
+
+def _count_filled(row: dict) -> int:
+    """Compte le nombre de colonnes remplies (heuristique de richesse)."""
+    return sum(1 for v in row.values() if str(v).strip())
+
+
+def _merge_missing(target: dict, source: dict):
+    """Copie les champs vides de source vers target."""
+    for k, v in source.items():
+        if not str(target.get(k, "")).strip() and str(v).strip():
+            target[k] = v
+
+
+def dedup_by_siret(leads: list[dict]) -> tuple[list[dict], int]:
+    """Étape 1 : déduplique par SIRET. Priorité au téléphone rempli, puis à la priorité."""
+    by_siret: dict[str, list[int]] = {}
+    for i, lead in enumerate(leads):
+        siret = lead.get("SIRET", "").strip()
+        if siret:
+            by_siret.setdefault(siret, []).append(i)
+
+    to_remove: set[int] = set()
+
+    for siret, indices in by_siret.items():
+        if len(indices) < 2:
+            continue
+        group = [(i, leads[i]) for i in indices]
+        group.sort(key=lambda x: (
+            0 if x[1].get("Téléphone", "").strip() else 1,
+            PRIORITY_ORDER.get(x[1].get("Priorité", ""), 9),
+            -_count_filled(x[1]),
+        ))
+        keeper_idx, keeper = group[0]
+        for idx, row in group[1:]:
+            _merge_missing(keeper, row)
+            to_remove.add(idx)
+
+    n_fused = len(to_remove)
+    if to_remove:
+        leads = [lead for i, lead in enumerate(leads) if i not in to_remove]
+    return leads, n_fused
+
+
+def dedup_by_phone(leads: list[dict]) -> tuple[list[dict], int]:
+    """Étape 2 : déduplique par téléphone (même 9 chiffres + nom similaire ≥ 70%)."""
+    by_phone: dict[str, list[int]] = {}
+    for i, lead in enumerate(leads):
+        phone = _normalize_phone_9(lead.get("Téléphone", ""))
+        if phone:
+            by_phone.setdefault(phone, []).append(i)
+
+    to_remove: set[int] = set()
+
+    for phone, indices in by_phone.items():
+        if len(indices) < 2:
+            continue
+        remaining = [i for i in indices if i not in to_remove]
+        if len(remaining) < 2:
+            continue
+
+        for j in range(len(remaining)):
+            if remaining[j] in to_remove:
+                continue
+            for k in range(j + 1, len(remaining)):
+                if remaining[k] in to_remove:
+                    continue
+                name_a = clean_name(leads[remaining[j]].get("Nom de l'entreprise", ""))
+                name_b = clean_name(leads[remaining[k]].get("Nom de l'entreprise", ""))
+                if fuzz.token_sort_ratio(name_a, name_b) >= DEDUP_PHONE_NAME_THRESHOLD:
+                    a, b = remaining[j], remaining[k]
+                    a_score = (
+                        0 if leads[a].get("Téléphone", "").strip() else 1,
+                        PRIORITY_ORDER.get(leads[a].get("Priorité", ""), 9),
+                        -_count_filled(leads[a]),
+                    )
+                    b_score = (
+                        0 if leads[b].get("Téléphone", "").strip() else 1,
+                        PRIORITY_ORDER.get(leads[b].get("Priorité", ""), 9),
+                        -_count_filled(leads[b]),
+                    )
+                    if a_score <= b_score:
+                        _merge_missing(leads[a], leads[b])
+                        to_remove.add(b)
+                    else:
+                        _merge_missing(leads[b], leads[a])
+                        to_remove.add(a)
+
+    n_fused = len(to_remove)
+    if to_remove:
+        leads = [lead for i, lead in enumerate(leads) if i not in to_remove]
+    return leads, n_fused
+
+
+def dedup_by_fuzzy_name(leads: list[dict]) -> tuple[list[dict], int, list[str]]:
+    """Étape 3 : déduplique par nom fuzzy + même département (2 premiers chiffres CP)."""
+    by_dept: dict[str, list[int]] = {}
+    for i, lead in enumerate(leads):
+        cp = normalize_cp(lead.get("Code Postal", ""))
+        dept = cp[:2] if len(cp) >= 2 else ""
+        if dept:
+            by_dept.setdefault(dept, []).append(i)
+
+    to_remove: set[int] = set()
+    details: list[str] = []
+
+    for dept, indices in by_dept.items():
+        if len(indices) < 2:
+            continue
+        names_clean = {i: clean_name(leads[i].get("Nom de l'entreprise", ""))
+                       for i in indices}
+
+        for j in range(len(indices)):
+            if indices[j] in to_remove:
+                continue
+            for k in range(j + 1, len(indices)):
+                if indices[k] in to_remove:
+                    continue
+                a, b = indices[j], indices[k]
+                score = fuzz.token_sort_ratio(names_clean[a], names_clean[b])
+                if score >= DEDUP_FUZZY_NAME_THRESHOLD:
+                    a_filled = _count_filled(leads[a])
+                    b_filled = _count_filled(leads[b])
+                    name_a = leads[a].get("Nom de l'entreprise", "")
+                    cp_a = leads[a].get("Code Postal", "")
+                    name_b = leads[b].get("Nom de l'entreprise", "")
+                    cp_b = leads[b].get("Code Postal", "")
+                    if a_filled >= b_filled:
+                        _merge_missing(leads[a], leads[b])
+                        to_remove.add(b)
+                    else:
+                        _merge_missing(leads[b], leads[a])
+                        to_remove.add(a)
+                    details.append(
+                        f'"{name_a}" ({cp_a}) ≈ "{name_b}" ({cp_b}) → fusionné ({score}%)'
+                    )
+
+    n_fused = len(to_remove)
+    if to_remove:
+        leads = [lead for i, lead in enumerate(leads) if i not in to_remove]
+    return leads, n_fused, details
+
+
+def run_dedup_renforcee(leads: list[dict]) -> tuple[list[dict], dict]:
+    """Exécute les 3 étapes de déduplication renforcée."""
+    matrix_section("Déduplication renforcée")
+
+    leads, n_siret = dedup_by_siret(leads)
+    if n_siret:
+        matrix_ok(f"Doublons SIRET fusionnés : {n_siret}")
+
+    leads, n_phone = dedup_by_phone(leads)
+    if n_phone:
+        matrix_ok(f"Doublons téléphone fusionnés : {n_phone}")
+
+    leads, n_fuzzy, fuzzy_details = dedup_by_fuzzy_name(leads)
+    if n_fuzzy:
+        matrix_ok(f"Doublons nom fuzzy détectés : {n_fuzzy}")
+        for detail in fuzzy_details[:10]:
+            print(f"      {detail}")
+        if len(fuzzy_details) > 10:
+            print(f"      ... et {len(fuzzy_details) - 10} autres")
+
+    total_removed = n_siret + n_phone + n_fuzzy
+    dedup_stats = {
+        "siret": n_siret,
+        "phone": n_phone,
+        "fuzzy": n_fuzzy,
+        "total": total_removed,
+        "remaining": len(leads),
+    }
+
+    if total_removed:
+        matrix_separator()
+        matrix_kv("Doublons SIRET", f"{n_siret} lignes fusionnées")
+        matrix_kv("Doublons téléphone", f"{n_phone} lignes fusionnées")
+        matrix_kv("Doublons nom fuzzy", f"{n_fuzzy} lignes fusionnées")
+        matrix_separator()
+        matrix_kv("Total supprimé", f"{total_removed} lignes")
+        matrix_kv("Leads uniques restants", str(len(leads)))
+    else:
+        matrix_ok("Aucun doublon détecté")
+
+    return leads, dedup_stats
 
 
 # ── Croisement ────────────────────────────────────────────────────────────────
@@ -449,6 +647,9 @@ def main():
         phone_stats = enrich_phones_fallback(leads, pj_all_fiches)
         matrix_ok(f"Téléphones ajoutés via PJ : {phone_stats['added']}")
 
+    # ── Étape 3 : Déduplication renforcée ──
+    leads, dedup_stats = run_dedup_renforcee(leads)
+
     # ── Export CSV ──
     csv_path = os.path.join(output_dir, f"{filename}.csv")
     matrix_step("Export CSV final...")
@@ -479,6 +680,17 @@ def main():
         matrix_kv("Téléphones ajoutés via PJ", f"{phone_stats['added']}")
         matrix_kv("Toujours sans téléphone", f"{phone_stats['missing']}")
         matrix_kv("Total avec téléphone (final)", f"{n_total_tel} / {len(leads)} ({pct})")
+
+    # ── Stats déduplication ──
+    if dedup_stats["total"]:
+        matrix_separator()
+        matrix_section("Déduplication renforcée (récap)")
+        matrix_kv("Doublons SIRET", f"{dedup_stats['siret']} lignes fusionnées")
+        matrix_kv("Doublons téléphone", f"{dedup_stats['phone']} lignes fusionnées")
+        matrix_kv("Doublons nom fuzzy", f"{dedup_stats['fuzzy']} lignes fusionnées")
+        matrix_separator()
+        matrix_kv("Total supprimé", f"{dedup_stats['total']} lignes")
+        matrix_kv("Leads uniques restants", str(dedup_stats['remaining']))
 
     matrix_separator()
     matrix_kv("Fichier", os.path.basename(csv_path))
