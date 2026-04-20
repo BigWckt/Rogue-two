@@ -565,6 +565,17 @@ Enchaînement pipeline
 
 ---
 
+## 2026-04-20 — Profil immobilier ajouté à PROFILS_SKY
+
+### Ce qui a été fait
+- Ajout du profil `tg_immobilier` dans `PROFILS_SKY` (secteur TG) : codes NAF `68.31Z` (agences immobilières) et `68.32A` (administration de biens)
+- Les codes ROME correspondants existaient déjà dans `NAF_TO_ROME` : 68.31Z → C1504/C1501, 68.32A → C1502
+
+### État final
+**Fonctionnel** ✅
+
+---
+
 ## 2026-04-20 — script_enrichissement_pappers.py + Déduplication renforcée
 
 ### 1. Nouveau script : `script_enrichissement_pappers.py` (expérimental)

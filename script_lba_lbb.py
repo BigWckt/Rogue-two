@@ -136,6 +136,7 @@ PROFILS_SKY = {
     "btpm_moto":          ["45.40Z"],
 
     # ─── Secteur TG (Tertiaire / Grand commerce) ───
+    "tg_immobilier":      ["68.31Z", "68.32A"],
     "tg_stations_service":["47.30Z"],
     "tg_informatique":    ["47.41Z", "47.42Z", "47.43Z"],
     "tg_vetements_chaussures":["47.51Z", "47.52A", "47.52B", "47.53Z", "47.54Z", "47.59A", "47.59B", "47.71Z", "47.72A"],
