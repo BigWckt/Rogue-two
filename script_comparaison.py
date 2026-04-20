@@ -510,6 +510,7 @@ def merge_and_score(pj_data: dict[str, dict],
 
 def export_csv(leads: list[dict], csv_path: str):
     """Exporte un CSV unique avec colonne Priorité. SIRET en string."""
+    os.makedirs(os.path.dirname(csv_path) or ".", exist_ok=True)
     df = pd.DataFrame(leads, columns=OUTPUT_COLUMNS)
     df["SIRET"] = df["SIRET"].astype(str)
     df.to_csv(csv_path, index=False, encoding="utf-8-sig")

@@ -284,6 +284,7 @@ def enrich_one(nom: str, code_postal: str, siret_existing: str,
 
 def save_checkpoint(rows: list[dict], filepath: str):
     try:
+        os.makedirs(os.path.dirname(filepath) or ".", exist_ok=True)
         df = pd.DataFrame(rows)
         df.to_csv(filepath, index=False, encoding="utf-8-sig")
     except Exception as e:
@@ -365,6 +366,7 @@ def run_compare(fiches: list[dict], api_key: str, output_dir: str, filename: str
 
     # Export
     csv_path = os.path.join(output_dir, f"{filename}.csv")
+    os.makedirs(os.path.dirname(csv_path) or ".", exist_ok=True)
     df = pd.DataFrame(enriched_rows)
     df.to_csv(csv_path, index=False, encoding="utf-8-sig")
     matrix_ok(f"Fichier : {csv_path}")
@@ -451,6 +453,7 @@ def run_enrich(fiches: list[dict], api_key: str, output_dir: str, filename: str,
 
     # Export
     csv_path = os.path.join(output_dir, f"{filename}.csv")
+    os.makedirs(os.path.dirname(csv_path) or ".", exist_ok=True)
     df = pd.DataFrame(enriched_rows)
     for col in OUTPUT_COLUMNS:
         if col not in df.columns:

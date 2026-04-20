@@ -528,12 +528,14 @@ def deduplicate(lba_rows: list[dict], lbb_rows: list[dict]) -> tuple[list[dict],
 
 def save_backup_csv(rows: list[dict], filepath: str):
     """Sauvegarde intermédiaire CSV."""
+    os.makedirs(os.path.dirname(filepath) or ".", exist_ok=True)
     df = pd.DataFrame(rows, columns=OUTPUT_COLUMNS)
     df.to_csv(filepath, index=False, encoding="utf-8-sig")
 
 
 def export_csv(rows: list[dict], csv_path: str):
     """Exporte en CSV uniquement. SIRET en string."""
+    os.makedirs(os.path.dirname(csv_path) or ".", exist_ok=True)
     df = pd.DataFrame(rows, columns=OUTPUT_COLUMNS)
     df["SIRET"] = df["SIRET"].astype(str)
     df.to_csv(csv_path, index=False, encoding="utf-8-sig")

@@ -236,6 +236,7 @@ def search_siret(nom: str, code_postal: str, ville: str) -> dict:
 
 def save_checkpoint(rows: list[dict], filepath: str):
     try:
+        os.makedirs(os.path.dirname(filepath) or ".", exist_ok=True)
         df = pd.DataFrame(rows, columns=ENRICHMENT_COLUMNS)
         df.to_csv(filepath, index=False, encoding="utf-8-sig")
     except Exception as e:
@@ -257,6 +258,7 @@ def load_checkpoint(filepath: str) -> list[dict]:
 
 def export_csv(rows: list[dict], csv_path: str):
     """Exporte en CSV. SIRET en string."""
+    os.makedirs(os.path.dirname(csv_path) or ".", exist_ok=True)
     df = pd.DataFrame(rows, columns=ENRICHMENT_COLUMNS)
     df["SIRET"] = df["SIRET"].astype(str)
     df.to_csv(csv_path, index=False, encoding="utf-8-sig")

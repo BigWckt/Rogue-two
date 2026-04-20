@@ -260,6 +260,7 @@ def parse_bloc(bloc) -> dict | None:
 def save_intermediate_csv(fiches: list[dict], filepath: str):
     """Sauvegarde CSV intermédiaire pour reprise."""
     try:
+        os.makedirs(os.path.dirname(filepath) or ".", exist_ok=True)
         with open(filepath, "w", newline="", encoding="utf-8-sig") as f:
             writer = csv.DictWriter(f, fieldnames=OUTPUT_COLUMNS)
             writer.writeheader()
@@ -465,6 +466,7 @@ def scrape_pages_jaunes(activite: str, ville: str, nb_max: int,
 
 def export_csv(fiches: list[dict], csv_path: str):
     """Exporte en CSV uniquement."""
+    os.makedirs(os.path.dirname(csv_path) or ".", exist_ok=True)
     df = pd.DataFrame(fiches, columns=OUTPUT_COLUMNS)
     df.to_csv(csv_path, index=False, encoding="utf-8-sig")
 
