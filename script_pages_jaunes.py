@@ -525,7 +525,7 @@ def interactive_menu(args) -> tuple[list[str], str, int, str, str | None]:
 
     # 4. Nom de fichier
     raw = input(f"    {GREEN}▸{RESET} Nom du fichier de sortie (sans extension) [défaut: auto] : ").strip()
-    output_name = raw if raw else None
+    output_name = os.path.basename(raw) if raw else None
 
     # 5. Résolution output dir
     if args.batch:

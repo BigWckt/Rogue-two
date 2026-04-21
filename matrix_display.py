@@ -249,4 +249,5 @@ def ask_filename(default: str) -> str:
     print(f"{GREEN}  │  Nom du fichier de sortie (sans extension .csv)    │{RESET}")
     print(f"{GREEN}  └{'─' * 52}┘{RESET}")
     user_input = input(f"    [{default}] > ").strip()
-    return user_input if user_input else default
+    name = user_input if user_input else default
+    return os.path.basename(name)

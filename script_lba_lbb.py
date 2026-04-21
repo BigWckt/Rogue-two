@@ -753,7 +753,7 @@ def interactive_menu(args) -> tuple[list[str], list[str], int, str, str | None, 
 
     # 4. Nom de fichier
     raw = input(f"\n    {GREEN}▸{RESET} Nom du fichier de sortie (sans extension) [défaut: auto] : ").strip()
-    output_name = raw if raw else None
+    output_name = os.path.basename(raw) if raw else None
 
     # 5. Résolution batch
     output_dir, _, _ = _resolve_batch_output(args, selected, naf_codes=naf_codes)
