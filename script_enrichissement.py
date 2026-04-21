@@ -270,7 +270,7 @@ def parse_args():
     parser = argparse.ArgumentParser(
         description="Enrichissement SIRET — recherche via API recherche-entreprises",
     )
-    parser.add_argument("--input", required=True, help="Fichier CSV PJ source")
+    parser.add_argument("--input", type=str, default=None, help="Fichier CSV PJ source")
     parser.add_argument("--output", type=str, default=".",
                         help="Répertoire de sortie (défaut: racine repo)")
     parser.add_argument("--resume", action="store_true",
@@ -286,26 +286,82 @@ def parse_args():
 
 # ── Main ──────────────────────────────────────────────────────────────────────
 
+def _interactive_select_input(search_dir: str) -> str:
+    """Détecte les fichiers PJ dans le dossier et laisse l'utilisateur choisir."""
+    candidates = sorted([
+        f for f in os.listdir(search_dir)
+        if f.startswith("pj_") and f.endswith(".csv") and "_enrichi" not in f
+           and "_checkpoint" not in f and "_backup" not in f
+    ])
+    if not candidates:
+        matrix_fail(f"Aucun fichier PJ détecté dans {search_dir}")
+        sys.exit(1)
+
+    print()
+    matrix_section("Fichiers PJ détectés")
+    for i, f in enumerate(candidates, 1):
+        print(f"    {GREEN}{i}.{RESET} {f}")
+    print()
+    raw = input(f"    {GREEN}▸{RESET} Choix du fichier à enrichir (numéro) : ").strip()
+    try:
+        idx = int(raw) - 1
+        if 0 <= idx < len(candidates):
+            return os.path.join(search_dir, candidates[idx])
+    except ValueError:
+        pass
+    matrix_fail("Choix invalide")
+    sys.exit(1)
+
+
+def _interactive_select_engine() -> str:
+    """Laisse l'utilisateur choisir SIRENE ou PAPPERS."""
+    print()
+    matrix_section("Moteur d'enrichissement")
+    print(f"    {GREEN}1.{RESET} SIRENE (API recherche-entreprises.api.gouv.fr — gratuit)")
+    print(f"    {GREEN}2.{RESET} PAPPERS (API pappers.fr — nécessite clé API)")
+    print()
+    raw = input(f"    {GREEN}▸{RESET} Choix [défaut 1] : ").strip() or "1"
+    return raw
+
+
 def main():
     args = parse_args()
     if args.quiet:
         set_quiet(True)
-    input_file = args.input
-
-    if not os.path.exists(input_file):
-        matrix_fail(f"Fichier introuvable : {input_file}")
-        sys.exit(1)
 
     # Résolution du dossier de sortie : --batch > .current_batch > --output
     if args.batch:
         output_dir = args.batch
     else:
-        batch = read_current_batch()
-        if batch:
-            output_dir = batch["BATCH_DIR"]
+        batch_info = read_current_batch()
+        if batch_info:
+            output_dir = batch_info["BATCH_DIR"]
         else:
             output_dir = args.output
     os.makedirs(output_dir, exist_ok=True)
+
+    # Mode interactif si --input non fourni
+    if not args.input:
+        input_file = _interactive_select_input(output_dir)
+        engine = _interactive_select_engine()
+        if engine == "2":
+            pappers_key = os.environ.get("PAPPERS_API_KEY", "").strip()
+            if not pappers_key:
+                matrix_fail("Variable PAPPERS_API_KEY non définie.")
+                matrix_step("Lance : export PAPPERS_API_KEY=\"ta_clé\" (Linux/Mac)")
+                matrix_step("  ou : $env:PAPPERS_API_KEY = \"ta_clé\" (PowerShell)")
+                sys.exit(1)
+            script_dir = os.path.dirname(os.path.abspath(__file__))
+            cmd = [sys.executable, os.path.join(script_dir, "script_enrichissement_pappers.py"),
+                   "--input", input_file]
+            subprocess.run(cmd)
+            sys.exit(0)
+    else:
+        input_file = args.input
+
+    if not os.path.exists(input_file):
+        matrix_fail(f"Fichier introuvable : {input_file}")
+        sys.exit(1)
 
     # ── Bannière Matrix ──
     matrix_banner("ENRICHISSEMENT SIRET")

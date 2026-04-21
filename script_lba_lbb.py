@@ -24,7 +24,7 @@ import requests
 
 from batch_io import (
     detect_secteur, find_prosp_root, next_batch_number,
-    write_current_batch, SECTEUR_PREFIXES,
+    write_current_batch, SECTEUR_PREFIXES, match_naf,
 )
 from matrix_display import (
     GREEN, RED, BOLD, RESET,
@@ -43,13 +43,11 @@ NAF_TO_ROME = {
     "10.71C": ["D1102", "D1104"], "10.71D": ["D1104"],
     "56.10A": ["G1602", "G1603"], "56.10B": ["G1603"],
     "56.10C": ["G1603"], "56.21Z": ["G1602"],
-    "50.10A": ["G1204"],  # Transports maritimes (inclus à la demande dans mbt_restaurants)
     # Hôtellerie
     "55.10Z": ["G1703", "G1501"],
     # Commerce alimentaire
-    "47.11A": ["D1505"],
     "47.11B": ["D1106"], "47.11C": ["D1106"],
-    "47.11D": ["D1504", "D1106"], "47.11E": ["D1505"], "47.11F": ["D1504"],
+    "47.11D": ["D1504", "D1106"], "47.11F": ["D1504"],
     "47.19A": ["D1502"], "47.19B": ["D1502"],
     "47.21Z": ["D1106"], "47.22Z": ["D1103"],
     "47.23Z": ["D1106"], "47.24Z": ["D1106"], "47.25Z": ["D1106"],
@@ -82,7 +80,6 @@ NAF_TO_ROME = {
     # Informatique
     "62.01Z": ["M1805", "M1802"],
     # ─── Secteur Santé (NAF 86.xx) ───
-    "86.10A": ["J1306", "J1501", "J1502", "J1506", "J1507"],
     "86.10Z": ["J1306", "J1501", "J1502", "J1506", "J1507"],
     "86.21Z": ["J1102"],
     "86.22A": ["J1103"],
@@ -119,7 +116,7 @@ NAF_TO_ROME = {
 
 PROFILS_SKY = {
     # ─── Secteur SB (Services à la personne / Santé / Beauté) ───
-    "sb_sante":           ["86.10A", "86.10Z", "86.21Z", "86.22A", "86.22B", "86.22C", "86.23Z", "86.90B"],
+    "sb_sante":           ["86.10", "86.21", "86.22", "86.23", "86.90B"],
     "sb_accueil_enfants": ["88.91A", "84.11Z"],
     "sb_fleuriste":       ["47.76Z"],
     "sb_service_personne":["88.10A", "87.10A", "87.10C", "87.30A"],
@@ -127,12 +124,12 @@ PROFILS_SKY = {
     "sb_esthetique":      ["96.02B"],
 
     # ─── Secteur BTPM (Bâtiment / Mécanique) ───
-    "btpm_batiment":      ["43.99B", "74.90A", "43.99C", "41.20A", "41.20B", "43.33Z", "43.32B", "71.12B", "84.11Z"],
-    "btpm_electricite":   ["43.21A", "43.21B", "43.99C", "43.31Z", "43.22B", "43.29B", "36.00Z", "33.15Z", "45.11Z", "41.20A", "84.11Z"],
-    "btpm_plomberie":     ["43.22B", "43.22A", "43.21A", "36.00Z", "43.34Z", "41.20B"],
-    "btpm_chauffage_clim":["43.22B", "43.22A"],
+    "btpm_batiment":      ["43.99B", "74.90A", "43.99C", "41.20", "43.33Z", "43.32B", "71.12B", "84.11Z"],
+    "btpm_electricite":   ["43.21", "43.99C", "43.31Z", "43.22B", "43.29B", "36.00Z", "33.15Z", "45.11Z", "41.20A", "84.11Z"],
+    "btpm_plomberie":     ["43.22", "43.21A", "36.00Z", "43.34Z", "41.20B"],
+    "btpm_chauffage_clim":["43.22"],
     "btpm_menuiserie":    ["84.11Z", "43.32B", "16.23Z", "31.02Z", "31.01Z", "43.29A", "41.20A", "43.99D"],
-    "btpm_meca_carrosserie":["45.20A", "45.20B", "45.32Z", "45.11Z", "45.31Z", "84.11Z"],
+    "btpm_meca_carrosserie":["45.20", "45.32Z", "45.11Z", "45.31Z", "84.11Z"],
     "btpm_moto":          ["45.40Z"],
 
     # ─── Secteur TG (Tertiaire / Grand commerce) ───
@@ -144,18 +141,15 @@ PROFILS_SKY = {
     "tg_occasions":       ["47.79Z"],
 
     # ─── Secteur MBT (Métiers de Bouche / Tertiaire) ───
-    "mbt_boulangeries":          ["10.71A", "10.71B", "10.71C", "10.71D"],
-    "mbt_grande_distribution":   ["47.11A", "47.11B", "47.11C", "47.11D", "47.11E", "47.11F",
+    "mbt_boulangeries":          ["10.71"],
+    "mbt_grande_distribution":   ["47.11B", "47.11C", "47.11D", "47.11F",
                                   "47.19A", "47.19B", "47.21Z", "47.22Z", "47.23Z", "47.24Z", "47.25Z"],
-    "mbt_restaurants":           ["56.10A", "50.10A"],
+    "mbt_restaurants":           ["56.10A"],
 }
 
 # ── Avertissements de cohérence sémantique NAF ───────────────────────────────
 # Codes NAF dont la signification réelle peut surprendre l'utilisateur.
-NAF_SEMANTIC_WARNINGS = {
-    "50.10A": "⚠ 50.10A = 'Transports maritimes et côtiers de passagers' (pas 'Restaurant'). "
-              "Inclus dans mbt_restaurants à la demande explicite.",
-}
+NAF_SEMANTIC_WARNINGS = {}
 
 # ── Fallback géocodage ────────────────────────────────────────────────────────
 
@@ -312,13 +306,23 @@ def geocode(ville: str) -> tuple[float, float]:
 # ── Résolution NAF → ROME ────────────────────────────────────────────────────
 
 def resolve_rome_codes(naf_codes: list[str]) -> list[str]:
-    """Convertit une liste de codes NAF en codes ROME uniques."""
+    """Convertit une liste de codes NAF en codes ROME uniques.
+    Supporte les codes classe sans lettre (ex: '86.10' → toutes les sous-classes)."""
     rome_set = set()
     for naf in naf_codes:
+        naf = naf.strip()
         if naf in NAF_TO_ROME:
             rome_set.update(NAF_TO_ROME[naf])
-        else:
-            matrix_warn(f"Code NAF « {naf} » inconnu — ignoré")
+            continue
+        if len(naf) >= 4 and naf[-1].isdigit():
+            found = False
+            for key, values in NAF_TO_ROME.items():
+                if key.startswith(naf):
+                    rome_set.update(values)
+                    found = True
+            if found:
+                continue
+        matrix_warn(f"Code NAF « {naf} » non résolu — ignoré")
     return sorted(rome_set)
 
 
@@ -845,14 +849,22 @@ def main():
         filename = ask_filename(default_name)
 
     # ── Vérification de cohérence NAF → ROME ──
-    matrix_section("Vérification NAF → ROME")
-    missing_naf = [naf for naf in naf_codes if naf not in NAF_TO_ROME]
-    if missing_naf:
-        for naf in missing_naf:
-            matrix_warn(f"Code NAF {naf} absent de la table NAF_TO_ROME — sera ignoré.")
-            print(f"      Ajoutez-le à la table pour activer ce mapping.")
+    matrix_section("Codes NAF chargés" + (f" (profil {profile_label})" if profile_label else ""))
+    for naf in naf_codes:
+        naf_s = naf.strip()
+        if naf_s in NAF_TO_ROME:
+            romes = NAF_TO_ROME[naf_s]
+            print(f"      {naf_s} → sous-classe ({', '.join(romes)})")
+        elif len(naf_s) >= 4 and naf_s[-1].isdigit():
+            matched = [k for k in NAF_TO_ROME if k.startswith(naf_s)]
+            if matched:
+                print(f"      {naf_s}  → classe (couvre {', '.join(matched)})")
+            else:
+                matrix_warn(f"Code NAF « {naf_s} » non résolu — ignoré")
+        else:
+            matrix_warn(f"Code NAF « {naf_s} » non résolu — ignoré")
 
-    # Avertissements sémantiques : NAF présents mais dont le sens peut surprendre
+    # Avertissements sémantiques
     semantic_alerts = [naf for naf in naf_codes if naf in NAF_SEMANTIC_WARNINGS]
     if semantic_alerts:
         for naf in semantic_alerts:
@@ -868,13 +880,7 @@ def main():
         matrix_fail("Aucun code ROME trouvé pour les NAF fournis")
         sys.exit(1)
 
-    # Afficher le mapping effectif
-    matrix_ok(f"Codes ROME ciblés : {', '.join(rome_codes)}")
-    effective_naf = [naf for naf in naf_codes if naf in NAF_TO_ROME]
-    if effective_naf:
-        matrix_step("Mapping effectif :")
-        for naf in effective_naf:
-            print(f"      {naf} → {', '.join(NAF_TO_ROME[naf])}")
+    matrix_ok(f"Codes ROME résolus : {', '.join(rome_codes)}")
 
     # ── Boucle sur les villes ──
     all_city_results: dict[str, list[dict]] = {}

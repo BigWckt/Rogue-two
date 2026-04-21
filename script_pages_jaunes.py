@@ -724,20 +724,60 @@ def main():
     if batch and not args.quiet:
         print()
         matrix_section("Enchaînement pipeline")
-        print(f"    {GREEN}1.{RESET} Enrichissement SIRET + Croisement")
-        print(f"    {GREEN}2.{RESET} Enrichissement SIRET seulement")
-        print(f"    {GREEN}3.{RESET} Terminer")
+        print(f"    {GREEN}1.{RESET} Enrichissement + Croisement (SIRENE — gratuit)")
+        print(f"    {GREEN}2.{RESET} Enrichissement + Croisement (PAPPERS — nécessite clé API)")
+        print(f"    {GREEN}3.{RESET} Enrichissement uniquement (SIRENE)")
+        print(f"    {GREEN}4.{RESET} Enrichissement uniquement (PAPPERS)")
+        print(f"    {GREEN}5.{RESET} Terminer")
         print()
-        choice = input(f"    {GREEN}▸{RESET} Choix : ").strip()
+        choice = input(f"    {GREEN}▸{RESET} Choix [défaut 1] : ").strip() or "1"
+        script_dir = os.path.dirname(os.path.abspath(__file__))
 
-        if choice in ("1", "2"):
-            script_dir = os.path.dirname(os.path.abspath(__file__))
-            matrix_rain_fullscreen(duration=4, next_title="PHASE 2 — ENRICHISSEMENT SIRET")
+        if choice in ("2", "4"):
+            pappers_key = os.environ.get("PAPPERS_API_KEY", "").strip()
+            if not pappers_key:
+                matrix_fail("Variable PAPPERS_API_KEY non définie.")
+                matrix_step("Lance : export PAPPERS_API_KEY=\"ta_clé\" (Linux/Mac)")
+                matrix_step("  ou : $env:PAPPERS_API_KEY = \"ta_clé\" (PowerShell)")
+                print()
+                matrix_step("Retour au menu...")
+                alt = input(f"    {GREEN}▸{RESET} Utiliser SIRENE à la place ? (O/n) : ").strip().lower()
+                if alt == "n":
+                    pass  # quitter
+                else:
+                    choice = "1" if choice == "2" else "3"
+
+        if choice in ("1", "3"):
+            matrix_rain_fullscreen(duration=4, next_title="PHASE 2 — ENRICHISSEMENT SIRET (SIRENE)")
             cmd = [sys.executable, os.path.join(script_dir, "script_enrichissement.py"),
                    "--input", csv_path]
             if choice == "1":
                 cmd.append("--chain")
             subprocess.run(cmd)
+        elif choice in ("2", "4"):
+            matrix_rain_fullscreen(duration=4, next_title="PHASE 2 — ENRICHISSEMENT SIRET (PAPPERS)")
+            cmd = [sys.executable, os.path.join(script_dir, "script_enrichissement_pappers.py"),
+                   "--input", csv_path]
+            subprocess.run(cmd)
+            if choice == "2":
+                output_dir_enrich = batch.get("BATCH_DIR", ".")
+                enrichi_candidates = [
+                    f for f in os.listdir(output_dir_enrich)
+                    if f.endswith("_enrichi_pappers.csv")
+                ]
+                lba_candidates = [
+                    f for f in os.listdir(output_dir_enrich)
+                    if f.startswith("lba_lbb_") and f.endswith(".csv") and "_backup" not in f
+                ]
+                if enrichi_candidates and lba_candidates:
+                    enrichi_file = os.path.join(output_dir_enrich,
+                                                max(enrichi_candidates, key=lambda f: os.path.getmtime(os.path.join(output_dir_enrich, f))))
+                    lba_file = os.path.join(output_dir_enrich,
+                                            max(lba_candidates, key=lambda f: os.path.getmtime(os.path.join(output_dir_enrich, f))))
+                    matrix_rain_fullscreen(duration=4, next_title="PHASE 3 — CROISEMENT FINAL")
+                    cmd = [sys.executable, os.path.join(script_dir, "script_comparaison.py"),
+                           "--pj", enrichi_file, "--lba", lba_file]
+                    subprocess.run(cmd)
 
 
 if __name__ == "__main__":

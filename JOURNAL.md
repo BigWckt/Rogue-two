@@ -576,6 +576,76 @@ Enchaînement pipeline
 
 ---
 
+## 2026-04-21 — Refonte gestion NAF + choix moteur enrichissement
+
+### 1. Support codes NAF avec ET sans lettre finale
+
+Nouvelle fonction `match_naf(code_profil, code_entreprise)` dans `batch_io.py` :
+- Code avec lettre (`86.10Z`) → match exact uniquement
+- Code sans lettre (`86.10`) → match toutes les sous-classes (`86.10Z`, `86.10A`, `86.10B`…)
+- `check_naf_coherence()` réécrite pour utiliser `match_naf()` en interne
+
+Utilisée par : `resolve_rome_codes()`, filtre NAF dans `script_enrichissement.py` et `script_comparaison.py`.
+
+### 2. `resolve_rome_codes()` supporte les codes classe
+
+Résolution en 2 étapes : match exact d'abord, puis match par préfixe pour les codes sans lettre. `86.10` résout vers les ROME de `86.10Z` (et de toute autre sous-classe présente dans `NAF_TO_ROME`).
+
+### 3. Codes NAF invalides supprimés
+
+| Code | Raison | Action |
+|---|---|---|
+| `50.10A` | N'existe pas (division 50 = Transport par eau) | Supprimé de `NAF_TO_ROME` et `mbt_restaurants` |
+| `47.11A` | N'existe pas dans la NAF rév.2 | Supprimé |
+| `47.11E` | N'existe pas | Supprimé |
+| `86.10A` | N'existe pas, seul `86.10Z` est valide | Supprimé (`86.10Z` déjà présent) |
+
+### 4. PROFILS_SKY simplifiés avec codes classe
+
+Exemples de simplifications :
+- `sb_sante` : `["86.10", "86.21", "86.22", "86.23", "86.90B"]` (avant : 8 codes complets)
+- `mbt_boulangeries` : `["10.71"]` (avant : 4 codes `10.71A/B/C/D`)
+- `btpm_plomberie` : `["43.22", ...]` (avant : `43.22A`, `43.22B` séparés)
+- `mbt_restaurants` : `["56.10A"]` (supprimé `50.10A`)
+
+Codes spécifiques conservés quand seules certaines sous-classes sont pertinentes (ex: `86.90B` mais pas `86.90A`).
+
+### 5. Validation au démarrage
+
+Nouveau récap console au lancement de `script_lba_lbb.py` :
+```
+[+] Codes NAF chargés (profil sb_sante) :
+    86.10  → classe (couvre 86.10Z)
+    86.21  → classe (couvre 86.21Z)
+    86.22  → classe (couvre 86.22A, 86.22B, 86.22C)
+    86.90B → sous-classe (J1404)
+
+[+] Codes ROME résolus : J1102, J1103, J1104, J1303, ...
+```
+
+### 6. Choix du moteur d'enrichissement (SIRENE ou PAPPERS)
+
+**`script_pages_jaunes.py`** — menu d'enchaînement élargi à 5 choix :
+1. Enrichissement + Croisement (SIRENE)
+2. Enrichissement + Croisement (PAPPERS)
+3. Enrichissement seul (SIRENE)
+4. Enrichissement seul (PAPPERS)
+5. Terminer
+
+Si Pappers choisi et `PAPPERS_API_KEY` absente → message d'erreur clair + fallback SIRENE proposé.
+
+**`script_enrichissement.py`** — mode interactif quand `--input` omis :
+- Détecte les fichiers PJ dans le dossier batch
+- Propose le choix du moteur (SIRENE/PAPPERS)
+- Si PAPPERS choisi → délègue à `script_enrichissement_pappers.py`
+
+Transitions Matrix adaptées : `PHASE 2 — ENRICHISSEMENT SIRET (SIRENE)` ou `(PAPPERS)`.
+
+### État final
+**Fonctionnel** ✅
+
+---
+
 ## 2026-04-21 — Fix matching Pappers (score multi-critères)
 
 ### Problème

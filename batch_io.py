@@ -107,19 +107,34 @@ def read_current_batch(root: str = ".") -> dict | None:
     return None
 
 
+def match_naf(code_profil: str, code_entreprise: str) -> bool:
+    """
+    Compare un code NAF du profil avec un code NAF d'entreprise.
+    - Si code_profil a une lettre finale (ex: '86.10Z') → match exact uniquement
+    - Si code_profil n'a pas de lettre (ex: '86.10') → match toutes les sous-classes
+      qui commencent par ce préfixe ('86.10Z', '86.10A', '86.10B', etc.)
+    """
+    code_profil = code_profil.strip().upper()
+    code_entreprise = code_entreprise.strip().upper()
+    if not code_profil or not code_entreprise:
+        return False
+    if code_profil == code_entreprise:
+        return True
+    if len(code_profil) >= 4 and code_profil[-1].isdigit():
+        return code_entreprise.startswith(code_profil)
+    return False
+
+
 def check_naf_coherence(naf: str, naf_attendus: list[str]) -> bool:
     """
     Vérifie si un NAF est cohérent avec la liste attendue.
-    Match exact d'abord, puis match sur préfixe 4 caractères (avant la lettre).
+    Utilise match_naf() pour supporter les codes classe (sans lettre).
     Retourne True si cohérent, False si hors profil.
     """
     if not naf or not naf_attendus:
         return True
     naf = naf.strip()
-    if naf in naf_attendus:
-        return True
-    naf_prefix = naf[:4] if len(naf) >= 4 else naf
     for attendu in naf_attendus:
-        if attendu[:4] == naf_prefix:
+        if match_naf(attendu, naf):
             return True
     return False
