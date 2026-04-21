@@ -576,6 +576,41 @@ Enchaînement pipeline
 
 ---
 
+## 2026-04-21 — Fix matching Pappers (score multi-critères)
+
+### Problème
+Beaucoup d'entreprises connues sortaient à 0% de similarité. Cause : Pappers retourne la raison sociale légale (`MARIE BLACHERE SAS`) qui diffère du nom commercial Pages Jaunes (`Boulangerie Marie Blachère`). Le matching sur le nom seul échouait systématiquement.
+
+### Corrections apportées
+
+**1. Score multi-critères** (`_score_candidate`) :
+- Score nom = `max(ratio, token_sort_ratio)` × 0.5 — calculé en parallèle sur nettoyage léger ET agressif
+- Bonus code postal exact : +30 pts
+- Bonus ville (fuzzy ≥ 80%) : +20 pts
+- Score max possible : 100 pts
+
+**2. Nettoyage agressif** (`clean_name_aggressive`) :
+- Supprime tous les stop-words : formes juridiques + mots sectoriels (`boulangerie`, `patisserie`, `cabinet`, `agence`…) + articles (`le`, `la`, `les`, `du`, `de`…)
+- Comparaison sur les mots-clés restants uniquement
+
+**3. Seuils révisés** :
+- ≥ 80 pts : `"Trouvé par nom"` (confiance normale)
+- ≥ 60 pts : `"SIRET trouvé (confiance moyenne)"` — SIRET accepté mais flagué pour audit
+- Résultat unique avec bon CP : seuil abaissé à 50 pts (souvent la bonne entreprise, juste sous un nom légal)
+
+**4. Affichage console amélioré** :
+```
+PAPPERS ▸ Boulangerie Marie Blachère → ✗
+          Meilleur candidat : "MARIE BLACHERE DISTRIBUTION" (42pts)
+```
+
+**5. Signature `enrich_one`** étendue avec le paramètre `ville` (en plus de `nom`, `cp`, `siret_existing`) pour permettre le bonus ville dans le scoring.
+
+### État final
+**Fonctionnel** ✅
+
+---
+
 ## 2026-04-20 — script_enrichissement_pappers.py + Déduplication renforcée
 
 ### 1. Nouveau script : `script_enrichissement_pappers.py` (expérimental)

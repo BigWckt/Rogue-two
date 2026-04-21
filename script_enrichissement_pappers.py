@@ -88,16 +88,86 @@ def normalize_siret(raw) -> str:
         return str(raw).strip()
 
 
+STOP_WORDS = {
+    "sarl", "sas", "eurl", "sa", "srl", "sci", "scp", "snc", "sasu", "ei", "selarl",
+    "boulangerie", "patisserie", "patissier", "cabinet", "agence", "societe", "ste",
+    "ets", "etablissement", "maison", "le", "la", "les", "du", "de", "des",
+    "au", "aux", "et", "en",
+}
+
+
 def strip_accents(s: str) -> str:
     return unicodedata.normalize("NFKD", s).encode("ASCII", "ignore").decode()
 
 
 def clean_name(name: str) -> str:
+    """Nettoyage léger : accents + formes juridiques (pour fuzz.ratio)."""
     name = strip_accents(name).upper().strip()
-    for suffix in ["SARL", "SAS", "SA", "EURL", "SCI", "SASU", "EI", "SELARL",
-                   "SRL", "CABINET", "AGENCE", "SOCIETE", "STE"]:
-        name = re.sub(rf"\b{suffix}\b", "", name)
+    for w in ["SARL", "SAS", "EURL", "SCI", "SASU", "EI", "SELARL",
+              "SRL", "SCP", "SNC", "CABINET", "AGENCE", "SOCIETE", "STE",
+              "ETS", "ETABLISSEMENT"]:
+        name = re.sub(rf"\b{w}\b", "", name)
     return re.sub(r"\s+", " ", name).strip()
+
+
+def clean_name_aggressive(name: str) -> str:
+    """Nettoyage agressif : supprime tous les stop-words sectoriels pour comparaison mots-clés."""
+    name = strip_accents(name).lower()
+    name = re.sub(r"['\-]", " ", name)
+    name = re.sub(r"[^a-z0-9 ]", "", name)
+    words = [w for w in name.split() if w not in STOP_WORDS and len(w) > 1]
+    return " ".join(words)
+
+
+def _score_candidate(nom_query: str, cp_query: str, ville_query: str,
+                     candidate: dict) -> tuple[int, str]:
+    """
+    Score multi-critères : nom (50%) + code postal (+30) + ville (+20).
+    Retourne (score_final, meilleur_nom_trouvé).
+    """
+    siege = candidate.get("siege") or {}
+
+    # Collecter tous les noms disponibles
+    api_names = []
+    for field in ["nom_entreprise", "denomination", "nom_complet", "sigle", "nom"]:
+        v = candidate.get(field)
+        if v:
+            api_names.append(str(v))
+    enseigne = siege.get("enseigne") or ""
+    if enseigne:
+        api_names.append(enseigne)
+    if not api_names:
+        return 0, ""
+
+    # Score nom : max de ratio et token_sort_ratio après nettoyage léger + agressif
+    nom_q_clean = clean_name(nom_query)
+    nom_q_agg = clean_name_aggressive(nom_query)
+    best_name_score = 0
+    best_api_name = api_names[0]
+    for api_name in api_names:
+        s1 = fuzz.ratio(nom_q_clean, clean_name(api_name))
+        s2 = fuzz.token_sort_ratio(nom_q_clean, clean_name(api_name))
+        s3 = fuzz.token_sort_ratio(nom_q_agg, clean_name_aggressive(api_name))
+        s = max(s1, s2, s3)
+        if s > best_name_score:
+            best_name_score = s
+            best_api_name = api_name
+
+    score = best_name_score * 0.5
+
+    # Bonus code postal
+    cp_api = str(siege.get("code_postal") or "").strip()
+    if cp_query and cp_api and cp_query == cp_api:
+        score += 30
+
+    # Bonus ville
+    ville_api = str(siege.get("ville") or "").strip()
+    if ville_query and ville_api:
+        if fuzz.ratio(strip_accents(ville_query).upper(),
+                      strip_accents(ville_api).upper()) >= 80:
+            score += 20
+
+    return int(score), best_api_name
 
 
 def http_get(url, params=None):
@@ -197,8 +267,22 @@ def search_by_siret(siret: str, api_key: str) -> dict | None:
     return _extract_company_data(data)
 
 
-def search_by_name(nom: str, code_postal: str, api_key: str) -> dict | None:
-    """Recherche par nom + code postal."""
+_first_response_printed = False
+
+SCORE_THRESHOLD_HIGH = 80   # confiance normale
+SCORE_THRESHOLD_LOW  = 60   # confiance moyenne (SIRET accepté avec flag)
+SCORE_SINGLE_CP      = 50   # résultat unique avec bon CP → accepté directement
+
+
+def search_by_name(nom: str, code_postal: str, ville: str,
+                   api_key: str) -> dict | None:
+    """
+    Recherche par nom + code postal. Scoring multi-critères :
+      score = nom×0.5 + bonus_CP(+30) + bonus_ville(+20) → max 100
+    Seuils : ≥80 confiance normale, ≥60 confiance moyenne, résultat unique avec CP → ≥50.
+    Retourne None si aucun candidat ne passe les seuils.
+    Définit _score, _status, _best_candidate_name sur le résultat.
+    """
     params = {"q": nom, "api_token": api_key, "par_page": "5"}
     if code_postal:
         params["code_postal"] = code_postal
@@ -207,7 +291,6 @@ def search_by_name(nom: str, code_postal: str, api_key: str) -> dict | None:
     if not data:
         return None
 
-    # Debug: print first response structure
     global _first_response_printed
     if not _first_response_printed:
         _first_response_printed = True
@@ -219,40 +302,47 @@ def search_by_name(nom: str, code_postal: str, api_key: str) -> dict | None:
     if not results:
         return None
 
-    nom_clean = clean_name(nom)
     best_score = 0
     best_result = None
+    best_name = ""
 
     for r in results:
-        api_names = []
-        for field in ["nom_entreprise", "denomination", "nom_complet",
-                      "sigle", "nom"]:
-            v = r.get(field)
-            if v:
-                api_names.append(v)
-        siege = r.get("siege") or {}
-        enseigne = siege.get("enseigne") or ""
-        if enseigne:
-            api_names.append(enseigne)
+        score, api_name = _score_candidate(nom, code_postal, ville, r)
+        if score > best_score:
+            best_score = score
+            best_result = r
+            best_name = api_name
 
-        for api_name in api_names:
-            score = fuzz.ratio(nom_clean, clean_name(api_name))
-            if score > best_score:
-                best_score = score
-                best_result = r
+    if best_result is None:
+        return None
 
-    if best_result and best_score >= SIMILARITY_THRESHOLD:
-        extracted = _extract_company_data(best_result)
-        extracted["_score"] = round(best_score)
-        return extracted
+    # Cas spécial : résultat unique avec bon CP → seuil abaissé
+    threshold = SCORE_THRESHOLD_LOW
+    if len(results) == 1 and code_postal:
+        cp_api = str((best_result.get("siege") or {}).get("code_postal") or "")
+        if cp_api == code_postal:
+            threshold = SCORE_SINGLE_CP
 
-    return None
+    if best_score < threshold:
+        # Retourner quand même le meilleur candidat pour affichage console
+        return {
+            "_status": "Non trouvé",
+            "_score": 0,
+            "_best_candidate_name": best_name,
+            "_best_candidate_score": best_score,
+        }
+
+    extracted = _extract_company_data(best_result)
+    extracted["_score"] = best_score
+    extracted["_best_candidate_name"] = best_name
+    if best_score >= SCORE_THRESHOLD_HIGH:
+        extracted["_status"] = "Trouvé par nom"
+    else:
+        extracted["_status"] = "SIRET trouvé (confiance moyenne)"
+    return extracted
 
 
-_first_response_printed = False
-
-
-def enrich_one(nom: str, code_postal: str, siret_existing: str,
+def enrich_one(nom: str, code_postal: str, ville: str, siret_existing: str,
                api_key: str) -> dict:
     """Enrichit une entreprise via Pappers. Retourne les données ou un status."""
     # Si on a déjà un SIRET, chercher directement
@@ -263,21 +353,33 @@ def enrich_one(nom: str, code_postal: str, siret_existing: str,
             result["_status"] = "SIRET trouvé (direct)"
             return result
 
-    # Sinon, recherche par nom
-    result = search_by_name(nom, code_postal, api_key)
-    if result:
-        result["_status"] = "Trouvé par nom"
+    # Recherche par nom + CP + ville
+    result = search_by_name(nom, code_postal, ville, api_key)
+    if result and result.get("_status") != "Non trouvé":
         return result
 
-    # Retry sans code postal
+    # Garder le meilleur candidat pour affichage si échec
+    best_candidate = result  # peut contenir _best_candidate_name/_best_candidate_score
+
+    # Retry sans code postal si le premier essai a échoué
     if code_postal:
         time.sleep(API_DELAY)
-        result = search_by_name(nom, "", api_key)
-        if result:
-            result["_status"] = "Trouvé par nom (sans CP)"
-            return result
+        result2 = search_by_name(nom, "", ville, api_key)
+        if result2 and result2.get("_status") != "Non trouvé":
+            result2["_status"] = result2["_status"].replace("Trouvé par nom",
+                                                             "Trouvé par nom (sans CP)")
+            return result2
+        # Garder le meilleur candidat du retry si meilleur score
+        if result2 and result2.get("_best_candidate_score", 0) > (
+                best_candidate or {}).get("_best_candidate_score", 0):
+            best_candidate = result2
 
-    return {"_status": "Non trouvé", "_score": 0}
+    return {
+        "_status": "Non trouvé",
+        "_score": 0,
+        "_best_candidate_name": (best_candidate or {}).get("_best_candidate_name", ""),
+        "_best_candidate_score": (best_candidate or {}).get("_best_candidate_score", 0),
+    }
 
 
 # ── Checkpoint ────────────────────────────────────────────────────────────────
@@ -320,12 +422,13 @@ def run_compare(fiches: list[dict], api_key: str, output_dir: str, filename: str
     for i, fiche in enumerate(fiches, 1):
         nom = fiche.get("Nom de l'entreprise", "")
         cp = fiche.get("Code Postal", "")
+        ville = fiche.get("Ville", "")
         siret_sirene = normalize_siret(fiche.get("SIRET", ""))
 
         print(f"    {GREEN}[{i}/{len(fiches)}]{RESET} {nom[:50]}...", end=" ", flush=True)
 
         time.sleep(API_DELAY)
-        result = enrich_one(nom, cp, siret_sirene, api_key)
+        result = enrich_one(nom, cp, ville, siret_sirene, api_key)
 
         siret_pappers = result.get("SIRET", "")
         row = {**fiche}
@@ -348,11 +451,22 @@ def run_compare(fiches: list[dict], api_key: str, output_dir: str, filename: str
         elif siret_sirene and not siret_pappers:
             stats["sirene_seul"] += 1
             row["Comparaison"] = "SIRENE seul"
-            print(f"SIRENE seul")
+            best = result.get("_best_candidate_name", "")
+            best_s = result.get("_best_candidate_score", 0)
+            if best:
+                print(f"SIRENE seul  {RED}[Pappers: \"{best[:35]}\" ({best_s}pts)]{RESET}")
+            else:
+                print(f"SIRENE seul")
         else:
             stats["non_trouves"] += 1
             row["Comparaison"] = "Non trouvé"
-            print(f"{RED}✗{RESET}")
+            best = result.get("_best_candidate_name", "")
+            best_s = result.get("_best_candidate_score", 0)
+            if best:
+                print(f"{RED}✗{RESET}")
+                print(f"             Meilleur candidat : \"{best[:45]}\" ({best_s}pts)")
+            else:
+                print(f"{RED}✗{RESET}")
 
         # Ajouter données Pappers si trouvées
         for col in ["Effectifs", "Dirigeant", "Chiffre d'affaires",
@@ -403,6 +517,7 @@ def run_enrich(fiches: list[dict], api_key: str, output_dir: str, filename: str,
     for i, fiche in enumerate(fiches, 1):
         nom = fiche.get("Nom de l'entreprise", "")
         cp = fiche.get("Code Postal", "")
+        ville = fiche.get("Ville", "")
 
         key = (nom.lower(), cp)
         if key in resume_data:
@@ -414,13 +529,13 @@ def run_enrich(fiches: list[dict], api_key: str, output_dir: str, filename: str,
         print(f"    {GREEN}[{i}/{len(fiches)}]{RESET} {nom[:50]}...", end=" ", flush=True)
 
         time.sleep(API_DELAY)
-        result = enrich_one(nom, cp, siret_existing, api_key)
+        result = enrich_one(nom, cp, ville, siret_existing, api_key)
 
         row = {**fiche}
         status = result.get("_status", "Non trouvé")
         score = result.get("_score", 0)
 
-        if "trouvé" in status.lower() or "Trouvé" in status:
+        if status != "Non trouvé":
             n_found += 1
             row["SIRET"] = result.get("SIRET", "") or row.get("SIRET", "")
             row["SIREN"] = result.get("SIREN", "")
@@ -433,17 +548,21 @@ def run_enrich(fiches: list[dict], api_key: str, output_dir: str, filename: str,
             row["Statut enrichissement"] = status
             row["Score similarité"] = str(score) if score else ""
             row["Source enrichissement"] = "Pappers"
+            label = f"({score}pts)" if score < SCORE_THRESHOLD_HIGH else f"({score}%)"
             print(f"{GREEN}✓{RESET}")
-            matrix_decode(f"{nom[:40]} → {row['SIRET']} ({score}%)", prefix=f"    {GREEN}PAPPERS ▸{RESET} ")
+            matrix_decode(f"{nom[:40]} → {row['SIRET']} {label}",
+                          prefix=f"    {GREEN}PAPPERS ▸{RESET} ")
         else:
             row.setdefault("SIRET", "")
             row.setdefault("SIREN", "")
             row["Statut enrichissement"] = status
-            row["Score similarité"] = str(score) if score else ""
+            row["Score similarité"] = ""
             row["Source enrichissement"] = ""
+            best = result.get("_best_candidate_name", "")
+            best_s = result.get("_best_candidate_score", 0)
             print(f"{RED}✗{RESET}")
-            if "erreur" in status.lower() or status == "Non trouvé" and not result.get("SIRET"):
-                pass
+            if best:
+                print(f"             Meilleur candidat : \"{best[:45]}\" ({best_s}pts)")
 
         enriched_rows.append(row)
 
