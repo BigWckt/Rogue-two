@@ -794,3 +794,49 @@ Avant le croisement par SIRET :
 
 ### État final
 **Fonctionnel** ✅
+
+---
+
+## 2026-04-23 — Refonte PROFILS_SKY (25 profils) + Labels & Aliases
+
+### Contexte
+Mise à jour majeure des profils sectoriels Skill & You dans `script_lba_lbb.py` : passage de ~15 profils à 25 profils avec noms normalisés, labels lisibles pour le menu, et aliases de rétrocompatibilité.
+
+### 1. NAF_TO_ROME — Mises à jour
+
+**Ajoutés** : `47.29Z`, `95.25Z`, `47.77Z`, `46.72Z`, `46.19A`, `46.73A`, `46.73B`, `46.74A`, `46.74B`, `68.31Z`
+**Supprimés** (codes NAF invalides) : `50.10A`, `47.11A`, `47.11E`, `86.10A`
+
+### 2. PROFILS_SKY — 25 profils
+
+| Secteur | Profils |
+|---------|---------|
+| SB | `sb_etablissement_de_sante`, `sb_accueil_enfants`, `sb_fleuriste`, `sb_service_a_la_personne`, `sb_coiffure`, `sb_esthetique` |
+| BTPM | `btpm_batiment`, `btpm_electricite`, `btpm_plomberie`, `btpm_chauffage_clim`, `btpm_menuiserie`, `btpm_meca_carrosserie`, `btpm_moto` |
+| TG | `tg_stations_services`, `tg_magasins_informatique_high_tech`, `tg_magasins_vetements_chaussures`, `tg_magasins_de_sport`, `tg_magasins_occasions`, `tg_bijoutiers`, `tg_maison_deco_ameublement_bricolage`, `tg_agences_immobilieres` |
+| MBT | `mbt_boulangeries`, `mbt_grande_distribution`, `mbt_commerce_de_bouche`, `mbt_restaurants` |
+
+### 3. PROFILS_ALIASES — Rétrocompatibilité
+
+Anciens noms redirigés vers les nouveaux avec avertissement console :
+- `sb_sante` → `sb_etablissement_de_sante`
+- `sb_service_personne` → `sb_service_a_la_personne`
+- `tg_informatique` → `tg_magasins_informatique_high_tech`
+- `tg_vetements_chaussures` → `tg_magasins_vetements_chaussures`
+- `tg_sport` → `tg_magasins_de_sport`
+- `tg_occasions` → `tg_magasins_occasions`
+- `tg_stations_service` → `tg_stations_services`
+- `tg_immobilier` → `tg_agences_immobilieres`
+
+### 4. PROFILS_LABELS — Labels lisibles
+
+Chaque profil a un label court pour l'affichage menu (ex: `sb_etablissement_de_sante` → "Établissement de santé").
+
+### 5. Fonctions mises à jour
+
+- **`_resolve_profiles()`** : vérifie d'abord `PROFILS_ALIASES` avant d'échouer, affiche un warning de renommage
+- **`interactive_profile_menu()`** : affiche les labels lisibles au lieu des clés techniques, accepte les anciens noms via aliases
+- **`interactive_menu()`** : menu groupé par secteur avec labels lisibles (colonne 40 chars), accepte aliases en saisie texte
+
+### État final
+**Fonctionnel** ✅

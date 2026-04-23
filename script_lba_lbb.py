@@ -51,6 +51,7 @@ NAF_TO_ROME = {
     "47.19A": ["D1502"], "47.19B": ["D1502"],
     "47.21Z": ["D1106"], "47.22Z": ["D1103"],
     "47.23Z": ["D1106"], "47.24Z": ["D1106"], "47.25Z": ["D1106"],
+    "47.29Z": ["D1106"],
     # Automobile
     "45.11Z": ["D1404"], "45.20A": ["I1604"], "45.20B": ["I1604"],
     "45.31Z": ["G1404", "I1604"], "45.32Z": ["G1404"],
@@ -65,6 +66,14 @@ NAF_TO_ROME = {
     "47.73Z": ["J1307"],
     # Fleuriste
     "47.76Z": ["D1209"],
+    # Bijoutiers
+    "95.25Z": ["I1401"],
+    "47.77Z": ["D1214"],
+    "46.72Z": ["D1214"],
+    # Maison / Déco / Ameublement / Bricolage
+    "46.19A": ["D1502"],
+    "46.73A": ["D1212"], "46.73B": ["D1212"],
+    "46.74A": ["D1212"], "46.74B": ["D1212"],
     # BTP
     "43.21A": ["F1602"], "43.21B": ["F1602"],
     "43.22A": ["F1603"], "43.22B": ["F1603"],
@@ -115,36 +124,81 @@ NAF_TO_ROME = {
 # ── Profils sectoriels Skill & You ──────────────────────────────────────────
 
 PROFILS_SKY = {
-    # ─── Secteur SB (Services à la personne / Santé / Beauté) ───
-    "sb_sante":           ["86.10", "86.21", "86.22", "86.23", "86.90B"],
-    "sb_accueil_enfants": ["88.91A", "84.11Z"],
-    "sb_fleuriste":       ["47.76Z"],
-    "sb_service_personne":["88.10A", "87.10A", "87.10C", "87.30A"],
-    "sb_coiffure":        ["96.02A"],
-    "sb_esthetique":      ["96.02B"],
+    # ─── Secteur SB (Services / Santé / Beauté) ───
+    "sb_etablissement_de_sante": ["86.10", "86.21", "86.22", "86.23", "86.90B"],
+    "sb_accueil_enfants":       ["88.91A", "84.11Z"],
+    "sb_fleuriste":             ["47.76"],
+    "sb_service_a_la_personne": ["87.10A", "87.10C", "87.30", "88.10A"],
+    "sb_coiffure":              ["96.02"],
+    "sb_esthetique":            ["96.02A", "96.02B"],
 
     # ─── Secteur BTPM (Bâtiment / Mécanique) ───
-    "btpm_batiment":      ["43.99B", "74.90A", "43.99C", "41.20", "43.33Z", "43.32B", "71.12B", "84.11Z"],
-    "btpm_electricite":   ["43.21", "43.99C", "43.31Z", "43.22B", "43.29B", "36.00Z", "33.15Z", "45.11Z", "41.20A", "84.11Z"],
-    "btpm_plomberie":     ["43.22", "43.21A", "36.00Z", "43.34Z", "41.20B"],
-    "btpm_chauffage_clim":["43.22"],
-    "btpm_menuiserie":    ["84.11Z", "43.32B", "16.23Z", "31.02Z", "31.01Z", "43.29A", "41.20A", "43.99D"],
-    "btpm_meca_carrosserie":["45.20", "45.32Z", "45.11Z", "45.31Z", "84.11Z"],
-    "btpm_moto":          ["45.40Z"],
+    "btpm_batiment":            ["41.20A", "41.20B", "43.32B", "43.33Z", "43.99B", "43.99C", "71.12B", "74.90A", "84.11Z"],
+    "btpm_electricite":         ["33.15Z", "36.00Z", "41.20A", "43.21A", "43.21B", "43.22B", "43.29B", "43.31Z", "43.99C", "45.11Z", "84.11Z"],
+    "btpm_plomberie":           ["36.00Z", "41.20B", "43.21A", "43.22", "43.34Z"],
+    "btpm_chauffage_clim":      ["43.22A", "43.22B"],
+    "btpm_menuiserie":          ["16.23Z", "31.01Z", "31.02Z", "41.20A", "43.29A", "43.32B", "43.99D", "84.11Z"],
+    "btpm_meca_carrosserie":    ["45.11Z", "45.20", "45.31Z", "45.32", "84.11Z"],
+    "btpm_moto":                ["45.40Z"],
 
     # ─── Secteur TG (Tertiaire / Grand commerce) ───
-    "tg_immobilier":      ["68.31Z", "68.32A"],
-    "tg_stations_service":["47.30Z"],
-    "tg_informatique":    ["47.41Z", "47.42Z", "47.43Z"],
-    "tg_vetements_chaussures":["47.51Z", "47.52A", "47.52B", "47.53Z", "47.54Z", "47.59A", "47.59B", "47.71Z", "47.72A"],
-    "tg_sport":           ["47.64Z", "47.65Z"],
-    "tg_occasions":       ["47.79Z"],
+    "tg_stations_services":                 ["47.3", "47.30"],
+    "tg_magasins_informatique_high_tech":   ["47.4", "47.41", "47.42", "47.43", "47.54"],
+    "tg_magasins_vetements_chaussures":     ["47.5", "47.51", "47.52", "47.53", "47.54", "47.59", "47.71", "47.72"],
+    "tg_magasins_de_sport":                 ["47.64", "47.65"],
+    "tg_magasins_occasions":                ["47.79"],
+    "tg_bijoutiers":                        ["46.72", "47.77", "95.25"],
+    "tg_maison_deco_ameublement_bricolage": ["46.19A", "46.73", "46.74", "47.52", "47.53", "47.59"],
+    "tg_agences_immobilieres":              ["68.31"],
 
     # ─── Secteur MBT (Métiers de Bouche / Tertiaire) ───
-    "mbt_boulangeries":          ["10.71"],
-    "mbt_grande_distribution":   ["47.11B", "47.11C", "47.11D", "47.11F",
-                                  "47.19A", "47.19B", "47.21Z", "47.22Z", "47.23Z", "47.24Z", "47.25Z"],
-    "mbt_restaurants":           ["56.10A"],
+    "mbt_boulangeries":         ["10.71"],
+    "mbt_grande_distribution":  ["47.11"],
+    "mbt_commerce_de_bouche":   ["47.21", "47.22", "47.23", "47.24", "47.25", "47.29"],
+    "mbt_restaurants":          ["56.10A"],
+}
+
+# ── Aliases de rétrocompatibilité (anciens noms → nouveaux) ─────────────────
+
+PROFILS_ALIASES = {
+    "sb_sante": "sb_etablissement_de_sante",
+    "sb_service_personne": "sb_service_a_la_personne",
+    "tg_informatique": "tg_magasins_informatique_high_tech",
+    "tg_vetements_chaussures": "tg_magasins_vetements_chaussures",
+    "tg_sport": "tg_magasins_de_sport",
+    "tg_occasions": "tg_magasins_occasions",
+    "tg_stations_service": "tg_stations_services",
+    "tg_immobilier": "tg_agences_immobilieres",
+}
+
+# ── Labels lisibles pour le menu interactif ─────────────────────────────────
+
+PROFILS_LABELS = {
+    "sb_etablissement_de_sante": "Établissement de santé",
+    "sb_accueil_enfants": "Accueil enfants",
+    "sb_fleuriste": "Fleuriste",
+    "sb_service_a_la_personne": "Service à la personne",
+    "sb_coiffure": "Coiffure",
+    "sb_esthetique": "Esthétique",
+    "btpm_batiment": "Bâtiment",
+    "btpm_electricite": "Électricité",
+    "btpm_plomberie": "Plomberie",
+    "btpm_chauffage_clim": "Chauffage / Clim",
+    "btpm_menuiserie": "Menuiserie",
+    "btpm_meca_carrosserie": "Méca / Carrosserie",
+    "btpm_moto": "Moto",
+    "tg_stations_services": "Stations services",
+    "tg_magasins_informatique_high_tech": "Informatique / High tech",
+    "tg_magasins_vetements_chaussures": "Vêtements / Chaussures",
+    "tg_magasins_de_sport": "Sport",
+    "tg_magasins_occasions": "Occasions",
+    "tg_bijoutiers": "Bijoutiers",
+    "tg_maison_deco_ameublement_bricolage": "Maison / Déco / Ameublement / Bricolage",
+    "tg_agences_immobilieres": "Agences immobilières",
+    "mbt_boulangeries": "Boulangeries",
+    "mbt_grande_distribution": "Grande distribution",
+    "mbt_commerce_de_bouche": "Commerce de bouche",
+    "mbt_restaurants": "Restaurants",
 }
 
 # ── Avertissements de cohérence sémantique NAF ───────────────────────────────
@@ -566,14 +620,22 @@ def parse_args():
 def _resolve_profiles(profile_names: list[str]) -> tuple[list[str], str]:
     """Résout un ou plusieurs noms de profils en liste de NAF dédupliquée."""
     combined: list[str] = []
+    resolved_names: list[str] = []
     for name in profile_names:
-        if name not in PROFILS_SKY:
+        if name in PROFILS_SKY:
+            resolved_names.append(name)
+            combined.extend(PROFILS_SKY[name])
+        elif name in PROFILS_ALIASES:
+            new_name = PROFILS_ALIASES[name]
+            matrix_warn(f"Profil « {name} » renommé → « {new_name} »")
+            resolved_names.append(new_name)
+            combined.extend(PROFILS_SKY[new_name])
+        else:
             matrix_fail(f"Profil inconnu : « {name} »")
             matrix_step("Profils disponibles : " + ", ".join(sorted(PROFILS_SKY)))
             sys.exit(1)
-        combined.extend(PROFILS_SKY[name])
     naf_codes = sorted(set(combined))
-    label = ", ".join(profile_names)
+    label = ", ".join(PROFILS_LABELS.get(n, n) for n in resolved_names)
     return naf_codes, label
 
 
@@ -584,7 +646,8 @@ def interactive_profile_menu() -> tuple[list[str], str]:
     names = sorted(PROFILS_SKY.keys())
     for i, name in enumerate(names, 1):
         naf_list = PROFILS_SKY[name]
-        print(f"    {GREEN}{i:>2}.{RESET} {name:<30s} ({len(naf_list)} codes NAF)")
+        display = PROFILS_LABELS.get(name, name)
+        print(f"    {GREEN}{i:>2}.{RESET} {display:<40s} ({len(naf_list)} codes NAF)")
     print()
     user_input = input(f"    Choix (numéro ou numéros séparés par virgules) > ").strip()
     if not user_input:
@@ -602,9 +665,10 @@ def interactive_profile_menu() -> tuple[list[str], str]:
                 matrix_fail(f"Index hors limites : {part}")
                 sys.exit(1)
         except ValueError:
-            # Peut-être un nom de profil directement
             if part in PROFILS_SKY:
                 selected.append(part)
+            elif part in PROFILS_ALIASES:
+                selected.append(PROFILS_ALIASES[part])
             else:
                 matrix_fail(f"Profil inconnu : « {part} »")
                 sys.exit(1)
@@ -724,7 +788,8 @@ def interactive_menu(args) -> tuple[list[str], list[str], int, str, str | None, 
         print(f"\n    {BOLD}── {sector} ──{RESET}")
         for name in profiles:
             naf_list = PROFILS_SKY[name]
-            print(f"    {GREEN}{idx:>2}.{RESET} {name:<30s} ({len(naf_list)} codes NAF)")
+            display = PROFILS_LABELS.get(name, name)
+            print(f"    {GREEN}{idx:>2}.{RESET} {display:<40s} ({len(naf_list)} codes NAF)")
             idx_map[idx] = name
             idx += 1
 
@@ -747,6 +812,8 @@ def interactive_menu(args) -> tuple[list[str], list[str], int, str, str | None, 
         except ValueError:
             if part in PROFILS_SKY:
                 selected.append(part)
+            elif part in PROFILS_ALIASES:
+                selected.append(PROFILS_ALIASES[part])
             else:
                 matrix_fail(f"Profil inconnu : « {part} »")
                 sys.exit(1)
