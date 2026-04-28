@@ -8,6 +8,7 @@ Module partagé entre les 4 scripts de prospection.
 
 import os
 import re
+import unicodedata
 
 CURRENT_BATCH_FILE = ".current_batch"
 
@@ -138,3 +139,59 @@ def check_naf_coherence(naf: str, naf_attendus: list[str]) -> bool:
         if match_naf(attendu, naf):
             return True
     return False
+
+
+# ── Exclusions enseignes nationales (MBT / TG) ──────────────────────────────
+
+EXCLUSIONS_ENSEIGNES = [
+    # Stations services
+    "esso", "total energies", "totalenergies", "bp", "shell",
+    # Informatique / High tech
+    "apple", "apple store", "fnac", "darty", "boulanger",
+    # Vêtements / Chaussures
+    "zara", "h&m", "uniqlo", "kiabi", "celio", "primark", "c&a",
+    # Sport
+    "decathlon", "go sport", "intersport",
+    # Bijoutiers
+    "cartier", "van cleef", "van cleef & arpels", "pandora", "swarovski",
+    # Maison / Déco / Ameublement / Bricolage
+    "ikea", "maisons du monde", "leroy merlin", "castorama", "brico depot",
+    "brico dépôt", "mr bricolage",
+    # Agences immobilières
+    "foncia", "nexity", "orpi", "century 21", "century21",
+    # Boulangeries
+    "paul", "marie blachère", "marie blachere", "ange",
+    # Grande distribution
+    "lidl", "aldi", "carrefour", "leclerc", "intermarché", "intermarche",
+    "auchan", "casino", "monoprix", "franprix", "picard", "picard surgelés",
+    "picard surgeles",
+    # Fast food / Restauration chaîne
+    "mcdonald", "mcdonalds", "mcdonald's", "mcd",
+    "burger king", "kfc", "subway", "domino's", "dominos",
+    "pizza hut", "quick", "o'tacos", "otacos", "chamas tacos",
+    "nabab kebab", "nabab",
+    # Restauration rapide générique
+    "fast food", "fastfood",
+]
+
+_ENSEIGNES_WORD_BOUNDARY = {"kebab"}
+
+
+def _strip_accents_bio(s: str) -> str:
+    return unicodedata.normalize("NFKD", s).encode("ASCII", "ignore").decode()
+
+
+def check_enseigne_excluded(name: str) -> str | None:
+    """
+    Vérifie si un nom d'entreprise matche une enseigne exclue.
+    Retourne le mot-clé matché ou None.
+    """
+    normalized = _strip_accents_bio(name.lower())
+    for keyword in EXCLUSIONS_ENSEIGNES:
+        norm_kw = _strip_accents_bio(keyword)
+        if norm_kw in normalized:
+            return keyword
+    for keyword in _ENSEIGNES_WORD_BOUNDARY:
+        if re.search(rf"\b{keyword}\b", normalized):
+            return keyword
+    return None

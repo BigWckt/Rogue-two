@@ -21,7 +21,7 @@ from datetime import date
 import pandas as pd
 from rapidfuzz import fuzz
 
-from batch_io import read_current_batch, check_naf_coherence
+from batch_io import read_current_batch, check_naf_coherence, check_enseigne_excluded
 from matrix_display import (
     GREEN, RED, BOLD, RESET,
     matrix_banner, matrix_section, matrix_kv, matrix_separator,
@@ -516,6 +516,50 @@ def export_csv(leads: list[dict], csv_path: str):
     df.to_csv(csv_path, index=False, encoding="utf-8-sig")
 
 
+# ── Détection souple de fichiers ─────────────────────────────────────────────
+
+def _find_csv_candidates(directory: str, keywords: list[str]) -> list[str]:
+    """Cherche les CSV dont le nom contient l'un des mots-clés (insensible casse)."""
+    if not os.path.isdir(directory):
+        return []
+    candidates = []
+    for f in os.listdir(directory):
+        if not f.lower().endswith(".csv"):
+            continue
+        basename_lower = f.lower()
+        if "_backup" in basename_lower:
+            continue
+        if any(kw in basename_lower for kw in keywords):
+            candidates.append(os.path.join(directory, f))
+    return sorted(candidates, key=lambda p: os.path.getmtime(p), reverse=True)
+
+
+def _select_file_interactive(candidates: list[str], label: str) -> str | None:
+    """Propose les fichiers candidats à l'utilisateur."""
+    if not candidates:
+        return None
+    if len(candidates) == 1:
+        basename = os.path.basename(candidates[0])
+        matrix_ok(f"Fichier {label} détecté : {basename}")
+        choice = input(f"    Utiliser ce fichier ? (O/n) : ").strip().lower()
+        if choice == "n":
+            return None
+        return candidates[0]
+    matrix_ok(f"Fichiers {label} détectés :")
+    for i, f in enumerate(candidates, 1):
+        print(f"    {GREEN}{i}.{RESET} {os.path.basename(f)}")
+    print()
+    raw = input(f"    {GREEN}▸{RESET} Choix (numéro) : ").strip()
+    try:
+        idx = int(raw) - 1
+        if 0 <= idx < len(candidates):
+            return candidates[idx]
+    except ValueError:
+        pass
+    matrix_warn("Choix invalide")
+    return None
+
+
 # ── CLI ───────────────────────────────────────────────────────────────────────
 
 def parse_args():
@@ -542,20 +586,34 @@ def main():
     if args.quiet:
         set_quiet(True)
 
-    if not args.pj and not args.lba:
-        matrix_fail("Spécifiez au moins --pj ou --lba")
-        sys.exit(1)
-
     # Résolution du dossier de sortie : --batch > .current_batch > --output
+    batch_info = read_current_batch()
     if args.batch:
         output_dir = args.batch
+    elif batch_info:
+        output_dir = batch_info["BATCH_DIR"]
     else:
-        batch = read_current_batch()
-        if batch:
-            output_dir = batch["BATCH_DIR"]
-        else:
-            output_dir = args.output
+        output_dir = args.output
     os.makedirs(output_dir, exist_ok=True)
+
+    # ── Détection souple des fichiers ──
+    if not args.pj:
+        candidates = _find_csv_candidates(output_dir, ["enrichi"])
+        if candidates:
+            args.pj = _select_file_interactive(candidates, "PJ enrichi")
+        else:
+            matrix_warn("Aucun fichier PJ enrichi détecté dans le batch")
+
+    if not args.lba:
+        candidates = _find_csv_candidates(output_dir, ["lba", "lbb"])
+        if candidates:
+            args.lba = _select_file_interactive(candidates, "LBA/LBB")
+        else:
+            matrix_warn("Aucun fichier LBA/LBB détecté dans le batch")
+
+    if not args.pj and not args.lba:
+        matrix_fail("Aucun fichier détecté. Spécifiez --pj et/ou --lba")
+        sys.exit(1)
 
     # ── Bannière Matrix ──
     matrix_banner("CROISEMENT FINAL — LEADS QUALIFIÉS")
@@ -572,7 +630,6 @@ def main():
             matrix_step(f"Chargement PJ enrichi : {args.pj}")
             pj_data = load_pj_enrichi(args.pj)
             matrix_ok(f"{len(pj_data)} entreprises avec SIRET")
-            # Charger toutes les fiches PJ (avec ou sans SIRET) pour le fallback téléphone
             pj_all_fiches = load_pj_all_fiches(args.pj)
             matrix_ok(f"{len(pj_all_fiches)} fiches PJ avec téléphone (pour fallback)")
 
@@ -605,7 +662,6 @@ def main():
     filename = ask_filename(default_name)
 
     # ── Filtre cohérence NAF ──
-    batch_info = read_current_batch()
     naf_attendus_str = (batch_info or {}).get("NAF_ATTENDUS", "")
     naf_attendus = [n.strip() for n in naf_attendus_str.split(",") if n.strip()] if naf_attendus_str else []
     naf_filter_stats = {"lba_excluded": 0, "pj_excluded": 0, "detail": {}}
@@ -632,6 +688,37 @@ def main():
             matrix_kv("PJ exclus (NAF hors profil)", str(naf_filter_stats["pj_excluded"]))
             for naf_code, cnt in sorted(naf_filter_stats["detail"].items(), key=lambda x: -x[1]):
                 print(f"      dont : {naf_code} ×{cnt}")
+
+    # ── Filtre enseignes nationales (MBT / TG) ──
+    secteur = (batch_info or {}).get("SECTEUR", "").upper()
+    enseigne_stats = {"lba_excluded": 0, "pj_excluded": 0, "detail": {}}
+    if secteur in ("MBT", "TG"):
+        for siret in list(lba_data.keys()):
+            nom = lba_data[siret].get("Nom de l'entreprise", "")
+            matched = check_enseigne_excluded(nom)
+            if matched:
+                enseigne_stats["lba_excluded"] += 1
+                enseigne_stats["detail"][matched] = enseigne_stats["detail"].get(matched, 0) + 1
+                del lba_data[siret]
+
+        for siret in list(pj_data.keys()):
+            nom = pj_data[siret].get("Nom de l'entreprise", "")
+            matched = check_enseigne_excluded(nom)
+            if matched:
+                enseigne_stats["pj_excluded"] += 1
+                enseigne_stats["detail"][matched] = enseigne_stats["detail"].get(matched, 0) + 1
+                del pj_data[siret]
+
+        total_enseigne = enseigne_stats["lba_excluded"] + enseigne_stats["pj_excluded"]
+        if total_enseigne:
+            matrix_section("Exclusions enseignes nationales")
+            matrix_kv("LBA/LBB exclus", str(enseigne_stats["lba_excluded"]))
+            matrix_kv("PJ exclus", str(enseigne_stats["pj_excluded"]))
+            top = sorted(enseigne_stats["detail"].items(), key=lambda x: -x[1])[:10]
+            detail = ", ".join(f"{k.title()} ×{v}" for k, v in top)
+            if len(enseigne_stats["detail"]) > 10:
+                detail += ", ..."
+            print(f"      {detail}")
 
     # ── Étape 1 : Croisement par SIRET ──
     matrix_section("Étape 1 — Croisement par SIRET")

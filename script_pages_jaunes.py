@@ -30,7 +30,7 @@ from urllib.parse import quote, urlparse
 
 import pandas as pd
 
-from batch_io import read_current_batch
+from batch_io import read_current_batch, check_enseigne_excluded
 from matrix_display import (
     GREEN, RED, BOLD, RESET,
     matrix_banner, matrix_section, matrix_kv, matrix_separator,
@@ -147,6 +147,23 @@ def apply_exclusions(fiches: list[dict]) -> tuple[list[dict], dict[str, int]]:
             if excluded:
                 break
         if not excluded:
+            filtered.append(fiche)
+    return filtered, counts
+
+
+def apply_exclusions_enseignes(fiches: list[dict]) -> tuple[list[dict], dict[str, int]]:
+    """
+    Filtre les enseignes nationales (MBT/TG uniquement).
+    Retourne (fiches_filtrées, compteurs_par_enseigne).
+    """
+    counts: dict[str, int] = {}
+    filtered = []
+    for fiche in fiches:
+        nom = fiche.get("Nom de l'entreprise", "")
+        matched = check_enseigne_excluded(nom)
+        if matched:
+            counts[matched] = counts.get(matched, 0) + 1
+        else:
             filtered.append(fiche)
     return filtered, counts
 
@@ -611,6 +628,13 @@ def main():
             default_name = f"pj_results_{ville_slug}_{today_str}"
         filename = ask_filename(default_name)
 
+    # ── Détection secteur pour filtre enseignes ──
+    _batch_info = read_current_batch()
+    _secteur = (_batch_info or {}).get("SECTEUR", "").upper()
+    _apply_enseigne_filter = _secteur in ("MBT", "TG")
+    if _apply_enseigne_filter:
+        matrix_step(f"Filtre enseignes nationales actif (secteur {_secteur})")
+
     # ── Boucle sur les villes ──
     all_city_results: dict[str, list[dict]] = {}
     all_city_stats: dict[str, dict] = {}
@@ -623,7 +647,7 @@ def main():
                 activite, ville, nb_max, output_dir, proxy_url=args.proxy,
             )
 
-            # Appliquer les exclusions avant déduplication
+            # Appliquer les exclusions catégorielles
             fiches, excl_counts = apply_exclusions(fiches)
             total_excl = sum(excl_counts.values())
             if total_excl:
@@ -632,13 +656,27 @@ def main():
                     print(f"      - {cat_name:<26s}: {cnt} fiche{'s' if cnt != 1 else ''}")
                 print(f"      Total exclus : {total_excl} fiche{'s' if total_excl != 1 else ''}")
 
+            # Appliquer le filtre enseignes nationales (MBT/TG uniquement)
+            total_enseigne_excl = 0
+            if _apply_enseigne_filter:
+                fiches, enseigne_counts = apply_exclusions_enseignes(fiches)
+                total_enseigne_excl = sum(enseigne_counts.values())
+                if total_enseigne_excl:
+                    matrix_step(f"Exclusions enseignes nationales : {total_enseigne_excl} fiches")
+                    top = sorted(enseigne_counts.items(), key=lambda x: -x[1])[:10]
+                    detail = ", ".join(f"{k.title()} ×{v}" for k, v in top)
+                    if len(enseigne_counts) > 10:
+                        detail += ", ..."
+                    print(f"      {detail}")
+
             for f in fiches:
                 f["Ville de recherche"] = ville
 
             all_city_results[ville] = fiches
             all_city_stats[ville] = stats
             all_city_stats[ville]["exclusions"] = total_excl
-            matrix_ok(f"{len(fiches)} fiches pour {ville} ({total_excl} exclus)")
+            all_city_stats[ville]["exclusions_enseignes"] = total_enseigne_excl
+            matrix_ok(f"{len(fiches)} fiches pour {ville} ({total_excl + total_enseigne_excl} exclus)")
 
             # Cleanup backup per-city
             ville_slug = ville.lower().replace(" ", "_").replace("-", "_")
@@ -760,24 +798,9 @@ def main():
                    "--input", csv_path]
             subprocess.run(cmd)
             if choice == "2":
-                output_dir_enrich = batch.get("BATCH_DIR", ".")
-                enrichi_candidates = [
-                    f for f in os.listdir(output_dir_enrich)
-                    if f.endswith("_enrichi_pappers.csv")
-                ]
-                lba_candidates = [
-                    f for f in os.listdir(output_dir_enrich)
-                    if f.startswith("lba_lbb_") and f.endswith(".csv") and "_backup" not in f
-                ]
-                if enrichi_candidates and lba_candidates:
-                    enrichi_file = os.path.join(output_dir_enrich,
-                                                max(enrichi_candidates, key=lambda f: os.path.getmtime(os.path.join(output_dir_enrich, f))))
-                    lba_file = os.path.join(output_dir_enrich,
-                                            max(lba_candidates, key=lambda f: os.path.getmtime(os.path.join(output_dir_enrich, f))))
-                    matrix_rain_fullscreen(duration=4, next_title="PHASE 3 — CROISEMENT FINAL")
-                    cmd = [sys.executable, os.path.join(script_dir, "script_comparaison.py"),
-                           "--pj", enrichi_file, "--lba", lba_file]
-                    subprocess.run(cmd)
+                matrix_rain_fullscreen(duration=4, next_title="PHASE 3 — CROISEMENT FINAL")
+                cmd = [sys.executable, os.path.join(script_dir, "script_comparaison.py")]
+                subprocess.run(cmd)
 
 
 if __name__ == "__main__":

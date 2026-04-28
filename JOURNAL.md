@@ -840,3 +840,44 @@ Chaque profil a un label court pour l'affichage menu (ex: `sb_etablissement_de_s
 
 ### État final
 **Fonctionnel** ✅
+
+---
+
+## 2026-04-28 — Exclusions enseignes nationales + Détection souple fichiers
+
+### 1. Liste d'exclusion enseignes nationales
+
+Ajout d'une liste `EXCLUSIONS_ENSEIGNES` dans `batch_io.py` (module partagé) contenant ~60 mots-clés de grandes marques/enseignes non-cibles : stations-services (Esso, Total, Shell), grande distribution (Carrefour, Lidl, Auchan...), fast-food (McDonald, KFC, Burger King...), retail national (Fnac, Darty, Zara, Decathlon...), immobilier (Foncia, Nexity, Orpi...), boulangeries chaînes (Paul, Marie Blachère, Ange).
+
+**Logique de matching** :
+- Normalisation (minuscules + suppression accents) puis recherche par sous-chaîne (`in`)
+- Exception "kebab" : matching par word boundary (`\bkebab\b`) pour éviter les faux positifs
+- Fonction `check_enseigne_excluded(name)` retourne le mot-clé matché ou `None`
+
+**Application conditionnelle** (secteurs MBT et TG uniquement) :
+- `script_pages_jaunes.py` : filtre appliqué après les exclusions catégorielles (pharmacies, hébergements...), avec log console détaillé (top 10 enseignes, compteurs)
+- `script_comparaison.py` : filtre appliqué sur les données LBA/LBB et PJ après le filtre NAF, avant le croisement SIRET
+- Secteur lu depuis `.current_batch` → pas d'application si SB ou BTPM
+
+### 2. Détection souple des fichiers dans `script_comparaison.py`
+
+Quand `--pj` ou `--lba` ne sont pas fournis en CLI, le script détecte automatiquement les fichiers dans le dossier batch actif :
+
+- **LBA/LBB** : cherche les CSV contenant "lba" ou "lbb" dans le nom (insensible casse, exclut `_backup`)
+- **PJ enrichi** : cherche les CSV contenant "enrichi" dans le nom
+- **1 fichier** → confirmation utilisateur ("Utiliser ce fichier ? O/n")
+- **Plusieurs fichiers** → menu numéroté trié par date de modification
+- **Aucun fichier** → warning, continue sans (si l'autre source est disponible)
+
+**Pipeline PAPPERS** dans `script_pages_jaunes.py` : le chaînage vers `script_comparaison.py` ne passe plus les fichiers en arguments explicites — il s'appuie sur l'auto-détection du script de comparaison.
+
+### Fichiers modifiés
+
+| Fichier | Changement |
+|---------|------------|
+| `batch_io.py` | +`EXCLUSIONS_ENSEIGNES`, +`check_enseigne_excluded()`, +`_strip_accents_bio()` |
+| `script_pages_jaunes.py` | +import `check_enseigne_excluded`, +`apply_exclusions_enseignes()`, filtre conditionnel MBT/TG, pipeline PAPPERS simplifié |
+| `script_comparaison.py` | +import `check_enseigne_excluded`, +`_find_csv_candidates()`, +`_select_file_interactive()`, auto-détection fichiers, filtre enseignes sur LBA/LBB+PJ |
+
+### État final
+**Fonctionnel** ✅
