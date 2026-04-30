@@ -144,34 +144,33 @@ def check_naf_coherence(naf: str, naf_attendus: list[str]) -> bool:
 # ── Exclusions enseignes nationales (MBT / TG) ──────────────────────────────
 
 EXCLUSIONS_ENSEIGNES = [
-    # Stations services
-    "esso", "total energies", "totalenergies", "bp", "shell",
-    # Informatique / High tech
-    "apple", "apple store", "fnac", "darty", "boulanger",
-    # Vêtements / Chaussures
-    "zara", "h&m", "uniqlo", "kiabi", "celio", "primark", "c&a",
-    # Sport
-    "decathlon", "go sport", "intersport",
-    # Bijoutiers
-    "cartier", "van cleef", "van cleef & arpels", "pandora", "swarovski",
-    # Maison / Déco / Ameublement / Bricolage
-    "ikea", "maisons du monde", "leroy merlin", "castorama", "brico depot",
-    "brico dépôt", "mr bricolage",
-    # Agences immobilières
-    "foncia", "nexity", "orpi", "century 21", "century21",
-    # Boulangeries
-    "paul", "marie blachère", "marie blachere", "ange",
-    # Grande distribution
-    "lidl", "aldi", "carrefour", "leclerc", "intermarché", "intermarche",
-    "auchan", "casino", "monoprix", "franprix", "picard", "picard surgelés",
-    "picard surgeles",
+    # Discount / Hyper
+    "lidl", "aldi", "auchan", "monoprix",
+    "picard", "picard surgeles", "picard surgelés",
+    # Hyper Carrefour (mais PAS Market/City/Express/Contact)
+    "carrefour hypermarche", "carrefour hypermarché",
     # Fast food / Restauration chaîne
-    "mcdonald", "mcdonalds", "mcdonald's", "mcd",
+    "mcdonald", "mcdonalds", "mcdonald's",
     "burger king", "kfc", "subway", "domino's", "dominos",
     "pizza hut", "quick", "o'tacos", "otacos", "chamas tacos",
     "nabab kebab", "nabab",
-    # Restauration rapide générique
-    "fast food", "fastfood",
+    # Stations
+    "esso",
+    # Informatique
+    "apple store",
+    # Vêtements
+    "zara", "h&m", "uniqlo", "kiabi", "celio", "primark",
+    # Sport
+    "decathlon",
+    # Bijouterie luxe
+    "cartier", "van cleef", "pandora", "swarovski",
+    # Ameublement / Bricolage
+    "ikea", "maisons du monde", "leroy merlin", "castorama",
+    "brico depot", "brico dépôt",
+    # Immobilier
+    "foncia",
+    # Boulangerie chaîne
+    "paul",
 ]
 
 _ENSEIGNES_WORD_BOUNDARY = {"kebab"}

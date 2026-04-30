@@ -881,3 +881,30 @@ Quand `--pj` ou `--lba` ne sont pas fournis en CLI, le script détecte automatiq
 
 ### État final
 **Fonctionnel** ✅
+
+---
+
+## 2026-04-30 — Affinage EXCLUSIONS_ENSEIGNES (proximité vs hyper)
+
+### Contexte
+Les mots-clés larges ("carrefour", "leclerc", "casino", "franprix") excluaient aussi les supermarchés de proximité et formats de quartier (Carrefour Market, Carrefour City, Casino Shop, Petit Casino, etc.) qui sont des cibles pertinentes pour l'alternance.
+
+### Enseignes retirées de la liste d'exclusion (gardées dans les résultats)
+Leclerc, Intermarché, Système U, Carrefour (formats proximité), Casino (formats proximité), Spar, Vival, Franprix, Coccinelle, G20, Sherpa, Panier Sympa, 8 à Huit
+
+### Enseignes maintenues en exclusion
+Lidl, Aldi, Auchan, Monoprix, Picard
+
+### Mots-clés supprimés
+`"carrefour"`, `"leclerc"`, `"intermarché"`, `"intermarche"`, `"casino"`, `"franprix"`, `"mcd"`, `"total energies"`, `"totalenergies"`, `"bp"`, `"shell"`, `"apple"`, `"fnac"`, `"darty"`, `"boulanger"`, `"c&a"`, `"go sport"`, `"intersport"`, `"van cleef & arpels"`, `"mr bricolage"`, `"nexity"`, `"orpi"`, `"century 21"`, `"century21"`, `"marie blachère"`, `"marie blachere"`, `"ange"`, `"fast food"`, `"fastfood"`, `"picard surgeles"`
+
+### Mots-clés ajoutés
+`"carrefour hypermarche"`, `"carrefour hypermarché"` (seul l'hypermarché est exclu)
+
+### Logique inchangée
+- Matching par sous-chaîne pour `EXCLUSIONS_ENSEIGNES`
+- Word boundary (`\bkebab\b`) pour `_ENSEIGNES_WORD_BOUNDARY`
+- Application conditionnelle MBT/TG uniquement
+
+### État final
+**Fonctionnel** ✅
