@@ -108,15 +108,24 @@ def read_current_batch(root: str = ".") -> dict | None:
     return None
 
 
+def _normalize_naf(code: str) -> str:
+    """Normalise un code NAF : insère le point après les 2 premiers chiffres si absent."""
+    code = code.strip().upper()
+    if len(code) >= 4 and "." not in code and code[:2].isdigit():
+        return code[:2] + "." + code[2:]
+    return code
+
+
 def match_naf(code_profil: str, code_entreprise: str) -> bool:
     """
     Compare un code NAF du profil avec un code NAF d'entreprise.
+    Normalise les deux codes (insertion du point si absent : 1071C → 10.71C).
     - Si code_profil a une lettre finale (ex: '86.10Z') → match exact uniquement
     - Si code_profil n'a pas de lettre (ex: '86.10') → match toutes les sous-classes
       qui commencent par ce préfixe ('86.10Z', '86.10A', '86.10B', etc.)
     """
-    code_profil = code_profil.strip().upper()
-    code_entreprise = code_entreprise.strip().upper()
+    code_profil = _normalize_naf(code_profil)
+    code_entreprise = _normalize_naf(code_entreprise)
     if not code_profil or not code_entreprise:
         return False
     if code_profil == code_entreprise:

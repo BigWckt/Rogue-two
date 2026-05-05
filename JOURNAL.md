@@ -908,3 +908,27 @@ Lidl, Aldi, Auchan, Monoprix, Picard
 
 ### État final
 **Fonctionnel** ✅
+
+---
+
+## 2026-05-05 — Fix bug filtre NAF : codes sans point exclus à tort
+
+### Problème observé
+Le profil `mbt_boulangeries = ["10.71"]` excluait les entreprises avec NAF `10.71C` (Boulangerie et boulangerie-pâtisserie) dans le récap "exclus — NAF hors profil" de `script_comparaison.py`.
+
+### Cause racine
+Les API LBA/LBB renvoient les codes NAF **sans point** (ex: `"1071C"` au lieu de `"10.71C"`). La fonction `match_naf()` dans `batch_io.py` comparait via `startswith()` sans normaliser : `"1071C".startswith("10.71")` → `False`.
+
+### Fix appliqué
+Ajout d'une fonction `_normalize_naf(code)` dans `batch_io.py` qui insère le point après les 2 premiers chiffres si absent (`"1071C"` → `"10.71C"`). Appelée en amont dans `match_naf()` sur les deux arguments.
+
+### Vérification non-régression (14 tests)
+- `match_naf("10.71", "1071C")` → True (fixé)
+- `match_naf("10.71", "10.71C")` → True (inchangé)
+- `match_naf("86.10Z", "8610Z")` → True (bonus)
+- `match_naf("47.11", "4711D")` → True (grande distribution OK)
+- `match_naf("10.71A", "10.71C")` → False (sous-classes distinctes OK)
+- `check_naf_coherence("4711D", ["10.71"])` → False (47.11D pas dans boulangeries OK)
+
+### État final
+**Fonctionnel** ✅
