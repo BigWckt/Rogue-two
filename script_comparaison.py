@@ -21,7 +21,7 @@ from datetime import date
 import pandas as pd
 from rapidfuzz import fuzz
 
-from batch_io import read_current_batch, check_naf_coherence, check_enseigne_excluded
+from batch_io import read_current_batch, check_naf_coherence, check_enseigne_excluded, get_naf_label
 from matrix_display import (
     GREEN, RED, BOLD, RESET,
     matrix_banner, matrix_section, matrix_kv, matrix_separator,
@@ -581,6 +581,60 @@ def parse_args():
 
 # ── Main ──────────────────────────────────────────────────────────────────────
 
+def _resolve_file(arg_value: str | None, batch_info: dict | None,
+                   batch_key: str, output_dir: str,
+                   keywords: list[str], label: str) -> str | None:
+    """Cascade : --arg > .current_batch key > auto-detection."""
+    if arg_value:
+        return arg_value
+
+    if batch_info and batch_key in batch_info:
+        path = batch_info[batch_key]
+        if os.path.isfile(path):
+            matrix_ok(f"{label} (via .current_batch) : {os.path.basename(path)}")
+            return path
+        else:
+            matrix_warn(f"{label} (via .current_batch) introuvable : {path}")
+
+    candidates = _find_csv_candidates(output_dir, keywords)
+    if candidates:
+        return _select_file_interactive(candidates, label)
+
+    matrix_warn(f"Aucun fichier {label} détecté dans le batch")
+    return None
+
+
+def _check_naf_coherence_warning(leads_data: dict[str, dict], source_label: str,
+                                  naf_attendus: list[str], batch_info: dict | None,
+                                  quiet: bool) -> bool:
+    """Vérifie si >80% des NAF sont hors profil. Retourne True si OK, False si abandon."""
+    if not naf_attendus or not leads_data:
+        return True
+    n_total = 0
+    n_mismatch = 0
+    for rec in leads_data.values():
+        naf = rec.get("Code NAF", "").strip()
+        if not naf:
+            continue
+        n_total += 1
+        if not check_naf_coherence(naf, naf_attendus):
+            n_mismatch += 1
+    if n_total == 0:
+        return True
+    pct = n_mismatch / n_total
+    if pct > 0.8:
+        profils = (batch_info or {}).get("PROFILS", "inconnu")
+        matrix_warn(
+            f"ATTENTION : {n_mismatch}/{n_total} ({pct*100:.0f}%) des entreprises {source_label} "
+            f"ont un NAF hors profil ({profils})"
+        )
+        if not quiet:
+            choice = input("    Continuer quand même ? (O/n) > ").strip().lower()
+            if choice == "n":
+                return False
+    return True
+
+
 def main():
     args = parse_args()
     if args.quiet:
@@ -596,27 +650,45 @@ def main():
         output_dir = args.output
     os.makedirs(output_dir, exist_ok=True)
 
-    # ── Détection souple des fichiers ──
-    if not args.pj:
-        candidates = _find_csv_candidates(output_dir, ["enrichi"])
-        if candidates:
-            args.pj = _select_file_interactive(candidates, "PJ enrichi")
-        else:
-            matrix_warn("Aucun fichier PJ enrichi détecté dans le batch")
+    # ── Bannière Matrix ──
+    matrix_banner("CROISEMENT FINAL — LEADS QUALIFIÉS")
 
-    if not args.lba:
-        candidates = _find_csv_candidates(output_dir, ["lba", "lbb"])
-        if candidates:
-            args.lba = _select_file_interactive(candidates, "LBA/LBB")
-        else:
-            matrix_warn("Aucun fichier LBA/LBB détecté dans le batch")
+    # ── Bannière de configuration ──
+    if batch_info:
+        matrix_section("Configuration du batch actif")
+        matrix_kv("Secteur", batch_info.get("SECTEUR", "—"))
+        matrix_kv("Batch", batch_info.get("BATCH_DIR", "—"))
+        matrix_kv("Date", batch_info.get("DATE", "—"))
+        profils = batch_info.get("PROFILS", "")
+        if profils:
+            matrix_kv("Profils", profils.replace(",", ", "))
+        naf_str = batch_info.get("NAF_ATTENDUS", "")
+        if naf_str:
+            codes = [c.strip() for c in naf_str.split(",") if c.strip()]
+            labeled = []
+            for c in codes[:8]:
+                lbl = get_naf_label(c)
+                labeled.append(f"{c} ({lbl})" if lbl else c)
+            display = ", ".join(labeled)
+            if len(codes) > 8:
+                display += f", ... (+{len(codes) - 8})"
+            matrix_kv("NAF attendus", display)
+        pj_file = batch_info.get("PJ_ENRICHED_FILE", "")
+        if pj_file:
+            matrix_kv("PJ enrichi", os.path.basename(pj_file))
+        lba_file = batch_info.get("LBA_LBB_FILE", "")
+        if lba_file:
+            matrix_kv("LBA/LBB", os.path.basename(lba_file))
+
+    # ── Résolution des fichiers (cascade) ──
+    args.pj = _resolve_file(args.pj, batch_info, "PJ_ENRICHED_FILE",
+                             output_dir, ["enrichi"], "PJ enrichi")
+    args.lba = _resolve_file(args.lba, batch_info, "LBA_LBB_FILE",
+                              output_dir, ["lba", "lbb"], "LBA/LBB")
 
     if not args.pj and not args.lba:
         matrix_fail("Aucun fichier détecté. Spécifiez --pj et/ou --lba")
         sys.exit(1)
-
-    # ── Bannière Matrix ──
-    matrix_banner("CROISEMENT FINAL — LEADS QUALIFIÉS")
 
     # Charger les données
     pj_data: dict[str, dict] = {}
@@ -645,6 +717,24 @@ def main():
         matrix_fail("Aucune donnée chargée")
         sys.exit(1)
 
+    # ── Garde cohérence NAF ──
+    naf_attendus_str = (batch_info or {}).get("NAF_ATTENDUS", "")
+    naf_attendus = [n.strip() for n in naf_attendus_str.split(",") if n.strip()] if naf_attendus_str else []
+
+    if naf_attendus:
+        if lba_data:
+            ok = _check_naf_coherence_warning(lba_data, "LBA/LBB", naf_attendus,
+                                               batch_info, args.quiet)
+            if not ok:
+                matrix_fail("Abandonné par l'utilisateur (incohérence NAF)")
+                sys.exit(0)
+        if pj_data:
+            ok = _check_naf_coherence_warning(pj_data, "PJ", naf_attendus,
+                                               batch_info, args.quiet)
+            if not ok:
+                matrix_fail("Abandonné par l'utilisateur (incohérence NAF)")
+                sys.exit(0)
+
     # ── Nom de fichier interactif ──
     today_str = date.today().strftime("%Y%m%d")
     # Déduire la ville depuis le nom de fichier
@@ -662,8 +752,6 @@ def main():
     filename = ask_filename(default_name)
 
     # ── Filtre cohérence NAF ──
-    naf_attendus_str = (batch_info or {}).get("NAF_ATTENDUS", "")
-    naf_attendus = [n.strip() for n in naf_attendus_str.split(",") if n.strip()] if naf_attendus_str else []
     naf_filter_stats = {"lba_excluded": 0, "pj_excluded": 0, "detail": {}}
 
     if naf_attendus:
@@ -686,8 +774,17 @@ def main():
             matrix_section("Filtre cohérence NAF")
             matrix_kv("LBA/LBB exclus (NAF hors profil)", str(naf_filter_stats["lba_excluded"]))
             matrix_kv("PJ exclus (NAF hors profil)", str(naf_filter_stats["pj_excluded"]))
+            shown = 0
             for naf_code, cnt in sorted(naf_filter_stats["detail"].items(), key=lambda x: -x[1]):
-                print(f"      dont : {naf_code} ×{cnt}")
+                label = get_naf_label(naf_code)
+                suffix = f" — {label}" if label else ""
+                print(f"      dont : {naf_code}{suffix} ×{cnt}")
+                shown += 1
+                if shown >= 10:
+                    remaining = len(naf_filter_stats["detail"]) - 10
+                    if remaining > 0:
+                        print(f"      ... et {remaining} autres codes NAF exclus")
+                    break
 
     # ── Filtre enseignes nationales (MBT / TG) ──
     secteur = (batch_info or {}).get("SECTEUR", "").upper()

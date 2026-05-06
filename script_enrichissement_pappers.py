@@ -24,7 +24,7 @@ import pandas as pd
 import requests
 from rapidfuzz import fuzz
 
-from batch_io import read_current_batch
+from batch_io import read_current_batch, update_current_batch
 from matrix_display import (
     GREEN, RED, BOLD, RESET,
     matrix_banner, matrix_section, matrix_kv, matrix_separator,
@@ -483,6 +483,7 @@ def run_compare(fiches: list[dict], api_key: str, output_dir: str, filename: str
     os.makedirs(os.path.dirname(csv_path) or ".", exist_ok=True)
     df = pd.DataFrame(enriched_rows)
     df.to_csv(csv_path, index=False, encoding="utf-8-sig")
+    update_current_batch(pj_enriched_file=os.path.abspath(csv_path))
     matrix_ok(f"Fichier : {csv_path}")
 
     # Récap
@@ -578,6 +579,7 @@ def run_enrich(fiches: list[dict], api_key: str, output_dir: str, filename: str,
         if col not in df.columns:
             df[col] = ""
     df.to_csv(csv_path, index=False, encoding="utf-8-sig")
+    update_current_batch(pj_enriched_file=os.path.abspath(csv_path))
     matrix_ok(f"Fichier : {csv_path}")
 
     # Cleanup checkpoint

@@ -24,7 +24,7 @@ import pandas as pd
 import requests
 from rapidfuzz import fuzz
 
-from batch_io import read_current_batch, check_naf_coherence
+from batch_io import read_current_batch, check_naf_coherence, update_current_batch, get_naf_label
 from matrix_display import (
     GREEN, RED, BOLD, RESET,
     matrix_banner, matrix_section, matrix_kv, matrix_separator,
@@ -462,13 +462,23 @@ def main():
         matrix_kv("NAF cohérent avec le profil", str(naf_stats["coherent"]))
         matrix_kv("NAF hors profil (exclus)", str(naf_stats["hors_profil"]))
         if naf_stats["detail"]:
+            shown = 0
             for naf_code, cnt in sorted(naf_stats["detail"].items(), key=lambda x: -x[1]):
-                print(f"      dont : {naf_code} ×{cnt}")
+                label = get_naf_label(naf_code)
+                suffix = f" — {label}" if label else ""
+                print(f"      dont : {naf_code}{suffix} ×{cnt}")
+                shown += 1
+                if shown >= 10:
+                    remaining = len(naf_stats["detail"]) - 10
+                    if remaining > 0:
+                        print(f"      ... et {remaining} autres codes NAF exclus")
+                    break
         matrix_kv("NAF non disponible (conservés)", str(naf_stats["indisponible"]))
 
     # ── Export CSV ──
     matrix_section("Export des données décryptées")
     export_csv(enriched_rows, csv_path)
+    update_current_batch(pj_enriched_file=os.path.abspath(csv_path))
     matrix_ok(f"Fichier : {csv_path}")
 
     # Cleanup checkpoint

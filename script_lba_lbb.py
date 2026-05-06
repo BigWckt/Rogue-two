@@ -24,7 +24,7 @@ import requests
 
 from batch_io import (
     detect_secteur, find_prosp_root, next_batch_number,
-    write_current_batch, SECTEUR_PREFIXES, match_naf,
+    write_current_batch, update_current_batch, SECTEUR_PREFIXES, match_naf,
 )
 from matrix_display import (
     GREEN, RED, BOLD, RESET,
@@ -1035,6 +1035,7 @@ def main():
 
         matrix_step("Export CSV consolidé...")
         export_csv(consolidated, csv_path)
+        update_current_batch(lba_lbb_file=os.path.abspath(csv_path))
         matrix_ok(f"Fichier : {csv_path}")
 
         # ── Synthèse ──
@@ -1059,6 +1060,7 @@ def main():
 
         matrix_step("Export CSV...")
         export_csv(rows, csv_path)
+        update_current_batch(lba_lbb_file=os.path.abspath(csv_path))
         matrix_ok(f"Fichier : {csv_path}")
 
         st = city_stats[ville]

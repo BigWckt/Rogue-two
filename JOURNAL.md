@@ -932,3 +932,51 @@ Ajout d'une fonction `_normalize_naf(code)` dans `batch_io.py` qui insère le po
 
 ### État final
 **Fonctionnel** ✅
+
+---
+
+## 2026-05-06 — Refonte chaînage pipeline + diagnostic NAF verbeux
+
+### Contexte
+Le chaînage des 3 phases du pipeline (`script_lba_lbb.py` → `script_enrichissement.py` → `script_comparaison.py`) reposait sur une auto-détection des fichiers CSV par mot-clé (`enrichi`, `lba`, `lbb`). Cette stratégie était fragile : elle pouvait choisir un fichier obsolète (ex: `_backup`, ancien batch). De plus, les exclusions NAF étaient opaques (pas de label, pas de raison), ce qui empêchait l'utilisateur de voir pourquoi une entreprise était exclue.
+
+### Modifications apportées
+
+#### `batch_io.py`
+- **`write_current_batch(...)`** : ajout de 2 kwargs optionnels `pj_enriched_file=""` et `lba_lbb_file=""`. Les chemins absolus des CSV sont écrits dans `.current_batch` au moment de leur génération.
+- **`update_current_batch(**kwargs)`** : nouvelle fonction qui met à jour des clés dans `.current_batch` sans écraser les autres. Cherche le fichier en remontant 4 niveaux (comme `read_current_batch`).
+- **`NAF_LABELS`** (~110 entrées sur 3 niveaux) : dictionnaire des libellés NAF — divisions (XX), classes (XX.XX), sous-classes (XX.XXY).
+- **`get_naf_label(code)`** : cascade sous-classe → classe → division. Ex: `'10.71C'` → `'Boulangerie et boulangerie-pâtisserie'` ; `'10.99X'` → `'Industrie alimentaire'` (fallback division).
+
+#### `script_lba_lbb.py`
+- Import de `update_current_batch`.
+- Appel `update_current_batch(lba_lbb_file=os.path.abspath(csv_path))` après l'export CSV (multi-villes et mono-ville).
+- Vérification : `_resolve_profiles()` retourne déjà `sorted(set(combined))` (union dédoublonnée des NAF). `_resolve_batch_output()` reçoit `naf_codes` et l'écrit dans `.current_batch`. Multi-profils OK.
+
+#### `script_enrichissement.py`
+- Import de `update_current_batch` et `get_naf_label`.
+- Appel `update_current_batch(pj_enriched_file=os.path.abspath(csv_path))` après l'export CSV.
+- Filtre NAF rendu verbeux : chaque exclusion affiche le code + le label NAF (ex: `dont : 47.11D — Supermarchés ×3`). Cap à 10 codes affichés, mention "et N autres" si débordement.
+
+#### `script_enrichissement_pappers.py`
+- Import de `update_current_batch`.
+- Appel `update_current_batch(pj_enriched_file=os.path.abspath(csv_path))` après les deux exports CSV (mode `compare` et mode `enrich`).
+
+#### `script_comparaison.py`
+- Import de `get_naf_label`.
+- **Bannière de configuration** au démarrage : affiche secteur, batch, date, profils, NAF attendus (avec labels, cap à 8), fichiers PJ enrichi et LBA/LBB.
+- **Cascade de résolution des fichiers** via nouvelle fonction `_resolve_file()` : `--arg CLI` > clé `.current_batch` (`PJ_ENRICHED_FILE` / `LBA_LBB_FILE`) > auto-détection par mot-clé (fallback). Si la clé du `.current_batch` pointe vers un fichier introuvable, un warning est loggé puis fallback auto-détection.
+- **Garde cohérence NAF** via nouvelle fonction `_check_naf_coherence_warning(leads_data, source_label, naf_attendus, batch_info, quiet)` : si > 80% des entreprises ont un NAF hors profil, affiche un warning détaillé (avec les profils du batch) et demande confirmation. En mode `--quiet`, pas de prompt — passe automatiquement.
+- Filtre NAF rendu verbeux (mêmes règles que `script_enrichissement.py` : code + label + cap à 10).
+
+### Vérifications
+- `python3 -m py_compile` sur les 5 scripts (`batch_io.py`, `script_lba_lbb.py`, `script_enrichissement.py`, `script_enrichissement_pappers.py`, `script_comparaison.py`) : OK.
+- Tests unitaires `get_naf_label()` :
+  - `'10.71C'` → `'Boulangerie et boulangerie-pâtisserie'` (sous-classe directe)
+  - `'10.71'` → `'Fabrication pain / pâtisserie fraîche'` (classe directe)
+  - `'1071C'` → `'Boulangerie et boulangerie-pâtisserie'` (normalisation OK)
+  - `'10.99X'` → `'Industrie alimentaire'` (fallback division)
+- Tests unitaires `update_current_batch()` : écriture/lecture round-trip + préservation des autres clés.
+
+### État final
+**Fonctionnel** ✅
