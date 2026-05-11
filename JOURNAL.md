@@ -980,3 +980,62 @@ Le chaînage des 3 phases du pipeline (`script_lba_lbb.py` → `script_enrichiss
 
 ### État final
 **Fonctionnel** ✅
+
+---
+
+## 2026-05-12 — Fix téléphone masqué grandes villes (script_pages_jaunes.py)
+
+### Problème observé
+- Batch Boulogne/Nanterre/Rueil (~140 fiches) : 136/140 téléphones récupérés ✅
+- Batch Lyon (477 fiches) : 0/477 téléphones ❌
+- Batch Lens (48 fiches) : 0/48 téléphones ❌
+- Nom, Adresse, Code Postal = 100% remplis dans tous les cas → pas un blocage Cloudflare
+
+### Diagnostic (hypothèse H4 confirmée)
+Pages Jaunes a **deux comportements DOM** selon la ville/le volume :
+- **Petites villes / IDF** : numéro en clair dans `.bi-fantomas .number-contact`
+- **Grandes villes / hors IDF** : numéro masqué derrière un bouton « Afficher le N° » (classe `click-to-call`, `bi-click-to`, etc.). Le DOM contient un texte non-numérique ("Afficher le N°") qui échoue silencieusement dans `validate_phone()`.
+
+Les hypothèses H1 (CF après ~50 fiches), H2 (option différente) et H3 (anti-bot progressif) sont rejetées — le pattern est uniforme (0%) et les données non-téléphone sont 100%.
+
+### Fix appliqué — Cascade A / B / C
+
+#### Étape A — Lecture statique (inchangée, cas IDF)
+`_read_phone_from_bloc(bloc)` essaie une liste élargie de sélecteurs DOM (dont `a[href^='tel:']`).
+
+#### Étape B — Clic de révélation (nouveau, cas grandes villes)
+`_try_reveal_phone(bloc, click_state)` :
+- Cherche le bouton parmi `REVEAL_SELECTORS` (10 sélecteurs candidats)
+- Clique avec `timeout=3000` + `time.sleep(random.uniform(1.2, 2.0))`
+- Re-lit le téléphone via `_read_phone_from_bloc()`
+
+Sélecteurs de révélation testés (par ordre de probabilité) :
+```
+[class*='click-to-call'], [class*='bi-click-to'], button[class*='num'],
+a[class*='num'], [data-pjlb*='click'], [class*='show-phone'],
+[class*='phone-reveal'], [class*='bi-phone-number'] button,
+.bi-fantomas button, .bi-fantomas a[href^='tel:']
+```
+
+#### Étape C — Page de détail (`--deep-phone`, OFF par défaut)
+Pour les fiches encore sans téléphone, visite l'URL fiche PJ et re-tente lecture + clic. Coût : ~3-4s par fiche → réservé aux batches stratégiques.
+
+### Anti-détection
+- Délai aléatoire 1.2–2.0s après chaque clic de révélation
+- Throttling : si > 40 clics en 60s → pause de 12s
+- `try/except` autour de chaque clic pour ne jamais planter une fiche entière
+
+### Nouveaux flags CLI
+- `--debug` : log détaillé par fiche (`[direct]`, `[via clic]`, `[vide]`)
+- `--deep-phone` : active le fallback page de détail (étape C)
+
+### Stats téléphone dans la synthèse
+Affichage en fin de run : X direct (DOM), Y via clic, Z via page détail, W sans téléphone.
+
+### Tests à faire (machine Windows)
+- 30 fiches Lyon (restaurant) → cible > 80% téléphones
+- 30 fiches Boulogne (restaurant) → cible > 95% (non-régression)
+- Si les sélecteurs de révélation ne matchent pas → inspecter le DOM Lyon en headful et ajuster `REVEAL_SELECTORS`
+
+### État final
+**Implémenté** — en attente de validation terrain ⏳

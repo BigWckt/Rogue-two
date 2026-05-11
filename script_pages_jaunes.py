@@ -197,12 +197,92 @@ def wait_for_pj_content(page, timeout_s: int = CF_TIMEOUT) -> bool:
     return False
 
 
+# ── Révélation téléphone (clic « Afficher le N° ») ─────────────────────────
+
+REVEAL_SELECTORS = [
+    "[class*='click-to-call']",
+    "[class*='bi-click-to']",
+    "button[class*='num']",
+    "a[class*='num']",
+    "[data-pjlb*='click']",
+    "[class*='show-phone']",
+    "[class*='phone-reveal']",
+    "[class*='bi-phone-number'] button",
+    ".bi-fantomas button",
+    ".bi-fantomas a[href^='tel:']",
+]
+
+PHONE_READ_SELECTORS = [
+    ".bi-fantomas .number-contact",
+    "[class*='number-contact']",
+    "[class*='phone-number']",
+    ".bi-fantomas [class*='phone']",
+    ".bi-fantomas [class*='tel']",
+    "a[href^='tel:']",
+]
+
+REVEAL_THROTTLE_MAX = 40
+REVEAL_THROTTLE_PAUSE = 12
+
+
+def _read_phone_from_bloc(bloc) -> str:
+    """Tente de lire le téléphone depuis le bloc avec plusieurs sélecteurs."""
+    for sel in PHONE_READ_SELECTORS:
+        tel_el = bloc.query_selector(sel)
+        if not tel_el:
+            continue
+        raw = ""
+        if sel.startswith("a[href^='tel:']"):
+            raw = (tel_el.get_attribute("href") or "").replace("tel:", "")
+        else:
+            raw = tel_el.inner_text().strip()
+        raw = re.sub(r"^T[ée]l\s*:\s*", "", raw)
+        validated = validate_phone(raw)
+        if validated:
+            return validated
+    return ""
+
+
+def _try_reveal_phone(bloc, click_state: dict) -> str:
+    """
+    Cherche et clique un bouton de révélation téléphone, puis re-lit le numéro.
+    click_state suit le throttling {count, window_start}.
+    """
+    btn = None
+    for sel in REVEAL_SELECTORS:
+        btn = bloc.query_selector(sel)
+        if btn:
+            break
+    if not btn:
+        return ""
+
+    now = time.time()
+    if now - click_state.get("window_start", 0) >= 60:
+        click_state["window_start"] = now
+        click_state["count"] = 0
+    click_state["count"] = click_state.get("count", 0) + 1
+    if click_state["count"] > REVEAL_THROTTLE_MAX:
+        time.sleep(REVEAL_THROTTLE_PAUSE)
+        click_state["window_start"] = time.time()
+        click_state["count"] = 1
+
+    try:
+        btn.click(timeout=3000)
+        time.sleep(random.uniform(1.2, 2.0))
+    except Exception:
+        return ""
+
+    return _read_phone_from_bloc(bloc)
+
+
 # ── Parsing d'un bloc entreprise ─────────────────────────────────────────────
 
-def parse_bloc(bloc) -> dict | None:
+def parse_bloc(bloc, click_state: dict | None = None,
+               debug: bool = False) -> dict | None:
     """
     Extrait les données d'un bloc entreprise PJ.
     Sélecteurs CSS issus de README_scraper_pj.md (structure DOM PJ vérifiée).
+    Cascade : lecture statique → clic de révélation.
     """
     today = date.today().isoformat()
 
@@ -236,13 +316,25 @@ def parse_bloc(bloc) -> dict | None:
     adresse = addr_el.inner_text().strip() if addr_el else ""
     cp, ville = extract_cp_ville(adresse)
 
-    # Téléphone : li .bi-fantomas .number-contact
+    # ── Téléphone — Étape A : lecture statique ──
     tel = ""
-    tel_el = bloc.query_selector(".bi-fantomas .number-contact")
-    if tel_el:
-        raw_tel = tel_el.inner_text().strip()
-        raw_tel = re.sub(r"^T[ée]l\s*:\s*", "", raw_tel)
-        tel = validate_phone(raw_tel)
+    phone_source = "vide"
+    tel = _read_phone_from_bloc(bloc)
+    if tel:
+        phone_source = "direct"
+
+    # ── Téléphone — Étape B : clic de révélation ──
+    if not tel and click_state is not None:
+        try:
+            tel = _try_reveal_phone(bloc, click_state)
+            if tel:
+                phone_source = "via clic"
+        except Exception:
+            pass
+
+    if debug:
+        tag = f"[{phone_source}]"
+        print(f"      {GREEN}☎{RESET} {tag:<12s} {tel or 'VIDE'} — {nom[:50]}")
 
     # Site web
     site = ""
@@ -269,6 +361,7 @@ def parse_bloc(bloc) -> dict | None:
         "Catégorie": categorie,
         "URL fiche PJ": fiche_url,
         "Date de collecte": today,
+        "_phone_source": phone_source,
     }
 
 
@@ -289,11 +382,15 @@ def save_intermediate_csv(fiches: list[dict], filepath: str):
 # ── Scraping principal ───────────────────────────────────────────────────────
 
 def scrape_pages_jaunes(activite: str, ville: str, nb_max: int,
-                        output_dir: str, proxy_url: str | None = None) -> tuple[list[dict], dict]:
+                        output_dir: str, proxy_url: str | None = None,
+                        debug: bool = False,
+                        deep_phone: bool = False) -> tuple[list[dict], dict]:
     """
     Scrape Pages Jaunes via Playwright avec bypass Cloudflare.
     Retourne (fiches, stats).
     proxy_url : URL proxy explicite (ex: http://user:pass@host:port), None = sortie directe.
+    debug : log détaillé par fiche (source téléphone, etc.).
+    deep_phone : fallback page de détail pour les fiches sans téléphone.
     """
     from playwright.sync_api import sync_playwright
 
@@ -302,6 +399,10 @@ def scrape_pages_jaunes(activite: str, ville: str, nb_max: int,
         "fiches_brutes": 0,
         "doublons": 0,
         "blocages_cf": 0,
+        "phones_direct": 0,
+        "phones_click": 0,
+        "phones_deep": 0,
+        "phones_missing": 0,
     }
 
     exec_path = None
@@ -317,6 +418,7 @@ def scrape_pages_jaunes(activite: str, ville: str, nb_max: int,
     fiches: list[dict] = []
     seen_keys: set[tuple[str, str]] = set()
     consecutive_empty = 0
+    click_state: dict = {"count": 0, "window_start": time.time()}
 
     with sync_playwright() as p:
         launch_args = [
@@ -438,11 +540,20 @@ def scrape_pages_jaunes(activite: str, ville: str, nb_max: int,
             for bloc in blocs:
                 if len(fiches) >= nb_max:
                     break
-                fiche = parse_bloc(bloc)
+                fiche = parse_bloc(bloc, click_state=click_state, debug=debug)
                 if fiche is None:
                     continue
 
                 stats["fiches_brutes"] += 1
+
+                # Comptage source téléphone
+                src = fiche.pop("_phone_source", "vide")
+                if src == "direct":
+                    stats["phones_direct"] += 1
+                elif src == "via clic":
+                    stats["phones_click"] += 1
+                else:
+                    stats["phones_missing"] += 1
 
                 # Déduplication sur (nom, code postal)
                 key = (
@@ -474,9 +585,88 @@ def scrape_pages_jaunes(activite: str, ville: str, nb_max: int,
 
             page_num += 1
 
+        # ── Étape C : deep-phone (page de détail) ──
+        if deep_phone:
+            no_phone = [f for f in fiches if not f.get("Téléphone") and f.get("URL fiche PJ")]
+            if no_phone:
+                matrix_section(f"Deep-phone : {len(no_phone)} fiches sans téléphone")
+                for i, fiche in enumerate(no_phone, 1):
+                    url = fiche["URL fiche PJ"]
+                    nom = fiche.get("Nom de l'entreprise", "")[:40]
+                    print(f"    {GREEN}[{i}/{len(no_phone)}]{RESET} {nom}...", end=" ", flush=True)
+                    try:
+                        page.goto(url, wait_until="domcontentloaded", timeout=30_000)
+                        time.sleep(random.uniform(2.5, 4.0))
+                        if not wait_for_pj_content(page, timeout_s=30):
+                            print(f"{RED}CF{RESET}")
+                            continue
+                        # Tenter lecture statique sur la page détail
+                        tel = ""
+                        for sel in PHONE_READ_SELECTORS:
+                            el = page.query_selector(sel)
+                            if not el:
+                                continue
+                            raw = el.inner_text().strip()
+                            raw = re.sub(r"^T[ée]l\s*:\s*", "", raw)
+                            tel = validate_phone(raw)
+                            if tel:
+                                break
+                        # Tenter clic de révélation sur page détail
+                        if not tel:
+                            for sel in REVEAL_SELECTORS:
+                                btn = page.query_selector(sel)
+                                if btn:
+                                    try:
+                                        btn.click(timeout=3000)
+                                        time.sleep(random.uniform(1.5, 2.5))
+                                    except Exception:
+                                        continue
+                                    for rsel in PHONE_READ_SELECTORS:
+                                        el = page.query_selector(rsel)
+                                        if not el:
+                                            continue
+                                        raw = el.inner_text().strip()
+                                        raw = re.sub(r"^T[ée]l\s*:\s*", "", raw)
+                                        tel = validate_phone(raw)
+                                        if tel:
+                                            break
+                                    if tel:
+                                        break
+                        if tel:
+                            fiche["Téléphone"] = tel
+                            stats["phones_deep"] += 1
+                            stats["phones_missing"] -= 1
+                            print(f"{GREEN}✓ {tel}{RESET}")
+                        else:
+                            print(f"{RED}✗{RESET}")
+                    except Exception as e:
+                        print(f"{RED}ERR{RESET}")
+                        if debug:
+                            print(f"        {e}")
+
         browser.close()
 
     return fiches, stats
+
+
+# ── Stats téléphone ─────────────────────────────────────────────────────────
+
+def _show_phone_stats(st: dict, n_fiches: int):
+    """Affiche les stats de capture téléphone."""
+    direct = st.get("phones_direct", 0)
+    click = st.get("phones_click", 0)
+    deep = st.get("phones_deep", 0)
+    missing = st.get("phones_missing", 0)
+    total_with = direct + click + deep
+    pct = f"{total_with / n_fiches * 100:.0f}%" if n_fiches else "0%"
+    matrix_kv("Téléphones", f"{total_with}/{n_fiches} ({pct})")
+    if click or deep:
+        matrix_kv("  dont direct (DOM)", str(direct))
+        matrix_kv("  dont via clic révélation", str(click))
+        if deep:
+            matrix_kv("  dont via page détail", str(deep))
+    if missing:
+        matrix_kv("  sans téléphone", str(missing))
 
 
 # ── Export CSV ───────────────────────────────────────────────────────────────
@@ -507,6 +697,10 @@ def parse_args():
                         help="Chemin de batch forcé (ex: Prosp/SB/batch_2)")
     parser.add_argument("--proxy", type=str, default=None,
                         help="Proxy explicite (ex: http://user:pass@host:port)")
+    parser.add_argument("--debug", action="store_true",
+                        help="Mode debug : log détaillé par fiche (source téléphone, etc.)")
+    parser.add_argument("--deep-phone", action="store_true",
+                        help="Fallback page de détail pour les fiches sans téléphone (lent)")
     return parser.parse_args()
 
 
@@ -645,6 +839,7 @@ def main():
         try:
             fiches, stats = scrape_pages_jaunes(
                 activite, ville, nb_max, output_dir, proxy_url=args.proxy,
+                debug=args.debug, deep_phone=getattr(args, "deep_phone", False),
             )
 
             # Appliquer les exclusions catégorielles
@@ -731,6 +926,13 @@ def main():
                   f"{st.get('blocages_cf', 0)} blocages CF)")
         matrix_separator()
         matrix_kv("Total consolidé (dédup nom+CP)", f"{len(consolidated)} fiches")
+        # Agréger les stats téléphone
+        agg_st = {"phones_direct": 0, "phones_click": 0, "phones_deep": 0, "phones_missing": 0}
+        for st in all_city_stats.values():
+            for k in agg_st:
+                agg_st[k] += st.get(k, 0)
+        _show_phone_stats(agg_st, len(consolidated))
+        matrix_separator()
         matrix_kv("Fichier", os.path.basename(csv_path))
     else:
         ville = villes[0]
@@ -751,6 +953,8 @@ def main():
         matrix_kv("Fiches retenues", str(len(fiches)))
         matrix_kv("Pages parcourues", str(st["pages_parcourues"]))
         matrix_kv("Blocages CF détectés", str(st["blocages_cf"]))
+        matrix_separator()
+        _show_phone_stats(st, len(fiches))
         matrix_separator()
         matrix_kv("Fichier", os.path.basename(csv_path))
 
