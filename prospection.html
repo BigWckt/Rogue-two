@@ -1,0 +1,759 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Skill & You — Outil de prospection</title>
+<style>
+  :root {
+    --blue: #1558EE;
+    --blue-dark: #0f44c4;
+    --teal: #00D4AA;
+    --gray-50: #f7f8fa;
+    --gray-100: #eef0f4;
+    --gray-200: #dde1e8;
+    --gray-400: #8b94a3;
+    --gray-700: #2d3340;
+    --gray-900: #11151d;
+    --shadow: 0 2px 8px rgba(17,21,29,.06);
+    --radius: 8px;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: Calibri, "Segoe UI", Arial, sans-serif;
+    margin: 0;
+    background: var(--gray-50);
+    color: var(--gray-900);
+    line-height: 1.5;
+  }
+  header {
+    background: var(--blue);
+    color: white;
+    padding: 24px 32px;
+    box-shadow: var(--shadow);
+  }
+  header h1 { margin: 0; font-size: 24px; font-weight: 600; }
+  header p { margin: 4px 0 0; opacity: .85; font-size: 14px; }
+  .container {
+    max-width: 920px;
+    margin: 24px auto;
+    padding: 0 24px;
+  }
+  .tabs {
+    display: flex;
+    gap: 4px;
+    border-bottom: 2px solid var(--gray-200);
+    margin-bottom: 24px;
+    flex-wrap: wrap;
+  }
+  .tab {
+    background: none;
+    border: none;
+    padding: 12px 20px;
+    font-family: inherit;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--gray-400);
+    cursor: pointer;
+    border-bottom: 3px solid transparent;
+    margin-bottom: -2px;
+    transition: all .15s;
+  }
+  .tab:hover { color: var(--gray-700); }
+  .tab.active {
+    color: var(--blue);
+    border-bottom-color: var(--blue);
+  }
+  .tab .num {
+    display: inline-block;
+    background: var(--gray-100);
+    color: var(--gray-700);
+    width: 22px;
+    height: 22px;
+    line-height: 22px;
+    border-radius: 50%;
+    font-size: 12px;
+    margin-right: 6px;
+    text-align: center;
+  }
+  .tab.active .num {
+    background: var(--blue);
+    color: white;
+  }
+  .panel {
+    display: none;
+    background: white;
+    border-radius: var(--radius);
+    padding: 28px;
+    box-shadow: var(--shadow);
+  }
+  .panel.active { display: block; }
+  .panel h2 {
+    margin: 0 0 4px;
+    font-size: 18px;
+    color: var(--gray-900);
+  }
+  .panel .desc {
+    color: var(--gray-400);
+    font-size: 13px;
+    margin: 0 0 24px;
+  }
+  .field {
+    margin-bottom: 18px;
+  }
+  .field label {
+    display: block;
+    font-weight: 600;
+    font-size: 13px;
+    margin-bottom: 6px;
+    color: var(--gray-700);
+  }
+  .field .hint {
+    font-size: 12px;
+    color: var(--gray-400);
+    margin-top: 4px;
+  }
+  .field input,
+  .field select {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid var(--gray-200);
+    border-radius: 6px;
+    font-family: inherit;
+    font-size: 14px;
+    background: white;
+    transition: border-color .15s;
+  }
+  .field input:focus,
+  .field select:focus {
+    outline: none;
+    border-color: var(--blue);
+    box-shadow: 0 0 0 3px rgba(21,88,238,.12);
+  }
+  .row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+  }
+  .naf-preview {
+    background: var(--gray-50);
+    border: 1px dashed var(--gray-200);
+    border-radius: 6px;
+    padding: 10px 12px;
+    font-size: 12px;
+    color: var(--gray-700);
+    margin-top: 6px;
+    min-height: 18px;
+  }
+  .naf-preview strong { color: var(--blue); }
+  .multi {
+    position: relative;
+  }
+  .multi-trigger {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid var(--gray-200);
+    border-radius: 6px;
+    font-family: inherit;
+    font-size: 14px;
+    background: white;
+    text-align: left;
+    cursor: pointer;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    color: var(--gray-700);
+  }
+  .multi-trigger:hover { border-color: var(--gray-400); }
+  .multi-trigger.placeholder { color: var(--gray-400); }
+  .multi-trigger::after {
+    content: "▾";
+    color: var(--gray-400);
+    font-size: 12px;
+    margin-left: 8px;
+  }
+  .multi-panel {
+    display: none;
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 0;
+    right: 0;
+    background: white;
+    border: 1px solid var(--gray-200);
+    border-radius: 6px;
+    box-shadow: 0 8px 24px rgba(17,21,29,.12);
+    max-height: 280px;
+    overflow-y: auto;
+    z-index: 10;
+  }
+  .multi.open .multi-panel { display: block; }
+  .multi-option {
+    padding: 9px 12px;
+    cursor: pointer;
+    font-size: 13px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: var(--gray-700);
+    transition: background .1s;
+  }
+  .multi-option:hover { background: var(--gray-50); }
+  .multi-option input[type="checkbox"] {
+    width: 14px;
+    height: 14px;
+    accent-color: var(--blue);
+    cursor: pointer;
+    margin: 0;
+  }
+  .multi-option.selected { background: rgba(21,88,238,.06); font-weight: 600; }
+  .multi-actions {
+    border-top: 1px solid var(--gray-200);
+    padding: 6px 12px;
+    display: flex;
+    gap: 12px;
+    background: var(--gray-50);
+    position: sticky;
+    bottom: 0;
+  }
+  .multi-actions button {
+    background: none;
+    border: none;
+    color: var(--blue);
+    font-family: inherit;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    padding: 4px 0;
+  }
+  .multi-actions button:hover { text-decoration: underline; }
+  .multi-tag-count {
+    display: inline-block;
+    background: var(--blue);
+    color: white;
+    border-radius: 10px;
+    padding: 1px 8px;
+    font-size: 11px;
+    font-weight: 600;
+    margin-left: 6px;
+  }
+  .actions {
+    display: flex;
+    gap: 12px;
+    margin-top: 24px;
+    flex-wrap: wrap;
+  }
+  button.btn {
+    padding: 11px 22px;
+    border-radius: 6px;
+    font-family: inherit;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    border: none;
+    transition: all .15s;
+  }
+  .btn-primary {
+    background: var(--blue);
+    color: white;
+  }
+  .btn-primary:hover { background: var(--blue-dark); }
+  .btn-secondary {
+    background: white;
+    color: var(--gray-700);
+    border: 1px solid var(--gray-200);
+  }
+  .btn-secondary:hover { background: var(--gray-50); }
+  .output {
+    margin-top: 20px;
+    display: none;
+  }
+  .output.visible { display: block; }
+  .output-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+  }
+  .output-label {
+    font-weight: 600;
+    font-size: 13px;
+    color: var(--gray-700);
+  }
+  .output pre {
+    background: var(--gray-900);
+    color: #e8edf5;
+    padding: 16px;
+    border-radius: 6px;
+    font-family: "Consolas", "Monaco", monospace;
+    font-size: 13px;
+    overflow-x: auto;
+    margin: 0;
+  }
+  .output pre .key { color: #79b8ff; }
+  .output pre .str { color: var(--teal); }
+  .output pre .num { color: #ffab70; }
+  .copy-feedback {
+    color: var(--teal);
+    font-size: 12px;
+    font-weight: 600;
+    opacity: 0;
+    transition: opacity .2s;
+  }
+  .copy-feedback.show { opacity: 1; }
+  .command-box {
+    background: var(--gray-50);
+    border-left: 3px solid var(--teal);
+    padding: 12px 16px;
+    margin-top: 12px;
+    border-radius: 4px;
+    font-family: "Consolas", "Monaco", monospace;
+    font-size: 12px;
+    color: var(--gray-700);
+    word-break: break-all;
+  }
+  .command-box-label {
+    font-family: Calibri, sans-serif;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: .5px;
+    color: var(--gray-400);
+    margin-bottom: 4px;
+    font-weight: 600;
+  }
+  footer {
+    text-align: center;
+    padding: 24px;
+    color: var(--gray-400);
+    font-size: 12px;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Outil de prospection — Skill & You</h1>
+  <p>Génération des paramètres pour le pipeline de qualification de leads</p>
+</header>
+
+<div class="container">
+  <div class="tabs">
+    <button class="tab active" data-tab="lba"><span class="num">1</span>LBA / LBB</button>
+    <button class="tab" data-tab="pj"><span class="num">2</span>Pages Jaunes</button>
+    <button class="tab" data-tab="enrich"><span class="num">3</span>Enrichissement SIRET</button>
+    <button class="tab" data-tab="compare"><span class="num">4</span>Croisement final</button>
+  </div>
+
+  <!-- ============ SCRIPT 1 — LBA/LBB ============ -->
+  <div class="panel active" data-panel="lba">
+    <h2>Script 1 — Collecte LBA / LBB</h2>
+    <p class="desc">Récupère les entreprises avec offres d'alternance actives (LBA) et celles à potentiel de recrutement (LBB).</p>
+
+    <div class="field">
+      <label for="lba-ville">Ville</label>
+      <input type="text" id="lba-ville" placeholder="Paris" value="Paris">
+    </div>
+
+    <div class="row">
+      <div class="field">
+        <label for="lba-secteur">Secteurs d'activité</label>
+        <div class="multi" id="lba-multi">
+          <button type="button" class="multi-trigger placeholder" id="lba-secteur-trigger">Choisir un ou plusieurs secteurs</button>
+          <div class="multi-panel" id="lba-secteur-panel"></div>
+        </div>
+        <div class="naf-preview" id="lba-naf-preview"></div>
+      </div>
+      <div class="field">
+        <label for="lba-rayon">Rayon de recherche (km)</label>
+        <select id="lba-rayon">
+          <option value="10">10 km</option>
+          <option value="30" selected>30 km</option>
+          <option value="60">60 km</option>
+          <option value="100">100 km</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="actions">
+      <button class="btn btn-primary" onclick="generate('lba')">Générer le JSON</button>
+      <button class="btn btn-secondary" onclick="resetForm('lba')">Réinitialiser</button>
+    </div>
+
+    <div class="output" id="lba-output">
+      <div class="output-header">
+        <span class="output-label">Paramètres générés</span>
+        <span class="copy-feedback" id="lba-feedback">✓ Copié</span>
+      </div>
+      <pre id="lba-json"></pre>
+      <div class="actions" style="margin-top:12px">
+        <button class="btn btn-primary" onclick="copyJson('lba')">Copier le JSON</button>
+        <button class="btn btn-secondary" onclick="downloadJson('lba')">Télécharger params.json</button>
+      </div>
+      <div class="command-box-label" style="margin-top:16px">Commande Claude Code</div>
+      <div class="command-box" id="lba-cmd"></div>
+    </div>
+  </div>
+
+  <!-- ============ SCRIPT 2 — PAGES JAUNES ============ -->
+  <div class="panel" data-panel="pj">
+    <h2>Script 2 — Scraping Pages Jaunes</h2>
+    <p class="desc">Collecte les entreprises listées sur Pages Jaunes pour un secteur donné. À exécuter en local (Playwright + Chromium requis).</p>
+
+    <div class="field">
+      <label for="pj-ville">Ville</label>
+      <input type="text" id="pj-ville" placeholder="Paris" value="Paris">
+    </div>
+
+    <div class="row">
+      <div class="field">
+        <label for="pj-secteur">Secteurs d'activité</label>
+        <div class="multi" id="pj-multi">
+          <button type="button" class="multi-trigger placeholder" id="pj-secteur-trigger">Choisir un ou plusieurs secteurs</button>
+          <div class="multi-panel" id="pj-secteur-panel"></div>
+        </div>
+        <div class="hint">Les secteurs seront utilisés comme mots-clés sur PJ (un run par mot-clé)</div>
+      </div>
+      <div class="field">
+        <label for="pj-nbmax">Nombre max de fiches</label>
+        <input type="number" id="pj-nbmax" value="100" min="10" max="500" step="10">
+      </div>
+    </div>
+
+    <div class="actions">
+      <button class="btn btn-primary" onclick="generate('pj')">Générer le JSON</button>
+      <button class="btn btn-secondary" onclick="resetForm('pj')">Réinitialiser</button>
+    </div>
+
+    <div class="output" id="pj-output">
+      <div class="output-header">
+        <span class="output-label">Paramètres générés</span>
+        <span class="copy-feedback" id="pj-feedback">✓ Copié</span>
+      </div>
+      <pre id="pj-json"></pre>
+      <div class="actions" style="margin-top:12px">
+        <button class="btn btn-primary" onclick="copyJson('pj')">Copier le JSON</button>
+        <button class="btn btn-secondary" onclick="downloadJson('pj')">Télécharger params.json</button>
+      </div>
+      <div class="command-box-label" style="margin-top:16px">Commande Claude Code</div>
+      <div class="command-box" id="pj-cmd"></div>
+    </div>
+  </div>
+
+  <!-- ============ SCRIPT 3 — ENRICHISSEMENT ============ -->
+  <div class="panel" data-panel="enrich">
+    <h2>Script 3 — Enrichissement SIRET</h2>
+    <p class="desc">Pour chaque entreprise issue de Pages Jaunes sans SIRET, interroge l'API recherche-entreprises.api.gouv.fr.</p>
+
+    <div class="field">
+      <label for="enrich-input">Fichier d'entrée (sortie du script 2)</label>
+      <input type="text" id="enrich-input" placeholder="pj_results_paris_20260407.xlsx" value="pj_results_paris_20260407.xlsx">
+      <div class="hint">Le fichier Excel produit par le script Pages Jaunes</div>
+    </div>
+
+    <div class="field">
+      <label for="enrich-resume">Mode reprise</label>
+      <select id="enrich-resume">
+        <option value="false" selected>Nouveau run</option>
+        <option value="true">Reprendre depuis le dernier checkpoint</option>
+      </select>
+    </div>
+
+    <div class="actions">
+      <button class="btn btn-primary" onclick="generate('enrich')">Générer le JSON</button>
+      <button class="btn btn-secondary" onclick="resetForm('enrich')">Réinitialiser</button>
+    </div>
+
+    <div class="output" id="enrich-output">
+      <div class="output-header">
+        <span class="output-label">Paramètres générés</span>
+        <span class="copy-feedback" id="enrich-feedback">✓ Copié</span>
+      </div>
+      <pre id="enrich-json"></pre>
+      <div class="actions" style="margin-top:12px">
+        <button class="btn btn-primary" onclick="copyJson('enrich')">Copier le JSON</button>
+        <button class="btn btn-secondary" onclick="downloadJson('enrich')">Télécharger params.json</button>
+      </div>
+      <div class="command-box-label" style="margin-top:16px">Commande Claude Code</div>
+      <div class="command-box" id="enrich-cmd"></div>
+    </div>
+  </div>
+
+  <!-- ============ SCRIPT 4 — CROISEMENT ============ -->
+  <div class="panel" data-panel="compare">
+    <h2>Script 4 — Croisement & qualification</h2>
+    <p class="desc">Croise les résultats PJ enrichis et LBA/LBB par SIRET pour produire le fichier Excel final prêt pour HubSpot.</p>
+
+    <div class="field">
+      <label for="compare-pj">Fichier PJ enrichi (sortie script 3)</label>
+      <input type="text" id="compare-pj" placeholder="pj_results_paris_20260407_enrichi.xlsx" value="pj_results_paris_20260407_enrichi.xlsx">
+      <div class="hint">Laisser vide pour faire un croisement avec LBA/LBB uniquement</div>
+    </div>
+
+    <div class="field">
+      <label for="compare-lba">Fichier LBA/LBB (sortie script 1)</label>
+      <input type="text" id="compare-lba" placeholder="lba_lbb_results_paris_20260407.xlsx" value="lba_lbb_results_paris_20260407.xlsx">
+    </div>
+
+    <div class="actions">
+      <button class="btn btn-primary" onclick="generate('compare')">Générer le JSON</button>
+      <button class="btn btn-secondary" onclick="resetForm('compare')">Réinitialiser</button>
+    </div>
+
+    <div class="output" id="compare-output">
+      <div class="output-header">
+        <span class="output-label">Paramètres générés</span>
+        <span class="copy-feedback" id="compare-feedback">✓ Copié</span>
+      </div>
+      <pre id="compare-json"></pre>
+      <div class="actions" style="margin-top:12px">
+        <button class="btn btn-primary" onclick="copyJson('compare')">Copier le JSON</button>
+        <button class="btn btn-secondary" onclick="downloadJson('compare')">Télécharger params.json</button>
+      </div>
+      <div class="command-box-label" style="margin-top:16px">Commande Claude Code</div>
+      <div class="command-box" id="compare-cmd"></div>
+    </div>
+  </div>
+</div>
+
+<footer>
+  Skill & You — Outil de prospection v1 · Génère les paramètres à coller dans Claude Code
+</footer>
+
+<script>
+// ============ SECTEURS PRÉCONFIGURÉS ============
+const SECTEURS = [
+  { label: "Boulangerie / Pâtisserie", naf: ["10.71C", "10.71D"], pj_keyword: "boulangerie pâtisserie" },
+  { label: "Boulangerie industrielle", naf: ["10.71A", "10.71B"], pj_keyword: "boulangerie" },
+  { label: "Pâtisserie", naf: ["10.71D"], pj_keyword: "pâtisserie" },
+  { label: "Boucherie / Charcuterie", naf: ["10.13A", "10.13B", "47.22Z"], pj_keyword: "boucherie charcuterie" },
+  { label: "Restauration traditionnelle", naf: ["56.10A"], pj_keyword: "restaurant" },
+  { label: "Restauration rapide", naf: ["56.10B", "56.10C"], pj_keyword: "restauration rapide" },
+  { label: "Traiteur", naf: ["56.21Z"], pj_keyword: "traiteur" },
+  { label: "Hôtellerie", naf: ["55.10Z"], pj_keyword: "hôtel" },
+  { label: "Supermarché / Hypermarché", naf: ["47.11D", "47.11F"], pj_keyword: "supermarché" },
+  { label: "Commerce alimentaire de proximité", naf: ["47.11B", "47.11C"], pj_keyword: "épicerie" },
+  { label: "Garage automobile", naf: ["45.20A", "45.20B"], pj_keyword: "garage automobile" },
+  { label: "Concession automobile", naf: ["45.11Z"], pj_keyword: "concessionnaire automobile" },
+  { label: "Agence immobilière", naf: ["68.31Z"], pj_keyword: "agence immobilière" },
+  { label: "Cabinet comptable", naf: ["69.20Z"], pj_keyword: "expert comptable" },
+  { label: "Cabinet d'avocat", naf: ["69.10Z"], pj_keyword: "avocat" },
+  { label: "Coiffure", naf: ["96.02A"], pj_keyword: "coiffeur" },
+  { label: "Esthétique / Soins de beauté", naf: ["96.02B"], pj_keyword: "institut de beauté" },
+  { label: "Pharmacie", naf: ["47.73Z"], pj_keyword: "pharmacie" },
+  { label: "Fleuriste", naf: ["47.76Z"], pj_keyword: "fleuriste" },
+  { label: "Électricité (BTP)", naf: ["43.21A"], pj_keyword: "électricien" },
+  { label: "Plomberie / Chauffage", naf: ["43.22A", "43.22B"], pj_keyword: "plombier chauffagiste" },
+  { label: "Peinture (BTP)", naf: ["43.34Z"], pj_keyword: "peintre bâtiment" },
+  { label: "Menuiserie", naf: ["43.32A"], pj_keyword: "menuisier" },
+];
+
+// ============ MULTI-SELECT INIT ============
+const selections = { lba: new Set(), pj: new Set() };
+
+function initMultiSelect(prefix, previewId) {
+  const trigger = document.getElementById(prefix + "-secteur-trigger");
+  const panel = document.getElementById(prefix + "-secteur-panel");
+  const wrapper = document.getElementById(prefix + "-multi");
+
+  SECTEURS.forEach((s, i) => {
+    const opt = document.createElement("label");
+    opt.className = "multi-option";
+    opt.innerHTML = `<input type="checkbox" value="${i}"><span>${s.label}</span>`;
+    opt.querySelector("input").addEventListener("change", e => {
+      if (e.target.checked) {
+        selections[prefix].add(i);
+        opt.classList.add("selected");
+      } else {
+        selections[prefix].delete(i);
+        opt.classList.remove("selected");
+      }
+      updateTrigger(prefix, previewId);
+    });
+    panel.appendChild(opt);
+  });
+
+  const actions = document.createElement("div");
+  actions.className = "multi-actions";
+  actions.innerHTML = `<button type="button" data-act="all">Tout sélectionner</button><button type="button" data-act="none">Tout désélectionner</button>`;
+  actions.querySelector('[data-act="all"]').addEventListener("click", () => {
+    panel.querySelectorAll('input[type="checkbox"]').forEach(cb => {
+      if (!cb.checked) { cb.checked = true; cb.dispatchEvent(new Event("change")); }
+    });
+  });
+  actions.querySelector('[data-act="none"]').addEventListener("click", () => {
+    panel.querySelectorAll('input[type="checkbox"]').forEach(cb => {
+      if (cb.checked) { cb.checked = false; cb.dispatchEvent(new Event("change")); }
+    });
+  });
+  panel.appendChild(actions);
+
+  trigger.addEventListener("click", e => {
+    e.stopPropagation();
+    document.querySelectorAll(".multi.open").forEach(m => { if (m !== wrapper) m.classList.remove("open"); });
+    wrapper.classList.toggle("open");
+  });
+  document.addEventListener("click", e => {
+    if (!wrapper.contains(e.target)) wrapper.classList.remove("open");
+  });
+
+  updateTrigger(prefix, previewId);
+}
+
+function updateTrigger(prefix, previewId) {
+  const trigger = document.getElementById(prefix + "-secteur-trigger");
+  const count = selections[prefix].size;
+  if (count === 0) {
+    trigger.textContent = "Choisir un ou plusieurs secteurs";
+    trigger.classList.add("placeholder");
+  } else if (count === 1) {
+    const i = [...selections[prefix]][0];
+    trigger.innerHTML = SECTEURS[i].label + '<span class="multi-tag-count">1</span>';
+    trigger.classList.remove("placeholder");
+  } else {
+    trigger.innerHTML = count + " secteurs sélectionnés" + '<span class="multi-tag-count">' + count + '</span>';
+    trigger.classList.remove("placeholder");
+  }
+  if (previewId) {
+    const preview = document.getElementById(previewId);
+    if (count === 0) {
+      preview.innerHTML = "<em style='color:#8b94a3'>Aucun secteur sélectionné</em>";
+    } else {
+      const allNaf = [...new Set([...selections[prefix]].flatMap(i => SECTEURS[i].naf))];
+      preview.innerHTML = "Codes NAF : <strong>" + allNaf.join(", ") + "</strong>";
+    }
+  }
+}
+
+initMultiSelect("lba", "lba-naf-preview");
+initMultiSelect("pj", null);
+
+// ============ TABS ============
+document.querySelectorAll(".tab").forEach(tab => {
+  tab.addEventListener("click", () => {
+    const target = tab.dataset.tab;
+    document.querySelectorAll(".tab").forEach(t => t.classList.toggle("active", t === tab));
+    document.querySelectorAll(".panel").forEach(p => p.classList.toggle("active", p.dataset.panel === target));
+  });
+});
+
+// ============ GENERATE JSON ============
+const generated = {};
+
+function generate(type) {
+  let params = {};
+  let cmd = "";
+
+  if (type === "lba") {
+    const ville = document.getElementById("lba-ville").value.trim();
+    const rayon = parseInt(document.getElementById("lba-rayon").value);
+    if (!ville || selections.lba.size === 0) {
+      alert("Renseignez la ville et choisissez au moins un secteur.");
+      return;
+    }
+    const allNaf = [...new Set([...selections.lba].flatMap(i => SECTEURS[i].naf))];
+    params = { ville, codes_naf: allNaf, rayon_km: rayon };
+    cmd = `python script_lba_lbb.py --config params.json`;
+  }
+
+  if (type === "pj") {
+    const ville = document.getElementById("pj-ville").value.trim();
+    const nbmax = parseInt(document.getElementById("pj-nbmax").value);
+    if (!ville || selections.pj.size === 0) {
+      alert("Renseignez la ville et choisissez au moins un secteur.");
+      return;
+    }
+    const keywords = [...selections.pj].map(i => SECTEURS[i].pj_keyword).join(" ");
+    params = { ville, type_commerce: keywords, nb_max_resultats: nbmax };
+    cmd = `python script_pages_jaunes.py --config params.json`;
+  }
+
+  if (type === "enrich") {
+    const input = document.getElementById("enrich-input").value.trim();
+    const resume = document.getElementById("enrich-resume").value === "true";
+    if (!input) {
+      alert("Renseignez le fichier d'entrée.");
+      return;
+    }
+    params = { input };
+    if (resume) params.resume = true;
+    cmd = resume
+      ? `python script_enrichissement.py --input ${input} --resume`
+      : `python script_enrichissement.py --input ${input}`;
+  }
+
+  if (type === "compare") {
+    const pj = document.getElementById("compare-pj").value.trim();
+    const lba = document.getElementById("compare-lba").value.trim();
+    if (!pj && !lba) {
+      alert("Renseignez au moins un fichier (PJ enrichi ou LBA/LBB).");
+      return;
+    }
+    params = {};
+    if (pj) params.pj = pj;
+    if (lba) params.lba = lba;
+    let parts = ["python script_comparaison.py"];
+    if (pj) parts.push(`--pj ${pj}`);
+    if (lba) parts.push(`--lba ${lba}`);
+    cmd = parts.join(" ");
+  }
+
+  generated[type] = params;
+  const json = JSON.stringify(params, null, 2);
+  document.getElementById(type + "-json").textContent = json;
+  document.getElementById(type + "-cmd").textContent = cmd;
+  document.getElementById(type + "-output").classList.add("visible");
+}
+
+function copyJson(type) {
+  const json = JSON.stringify(generated[type], null, 2);
+  navigator.clipboard.writeText(json).then(() => {
+    const fb = document.getElementById(type + "-feedback");
+    fb.classList.add("show");
+    setTimeout(() => fb.classList.remove("show"), 1500);
+  });
+}
+
+function downloadJson(type) {
+  const json = JSON.stringify(generated[type], null, 2);
+  const blob = new Blob([json], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "params.json";
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function clearMulti(prefix, previewId) {
+  selections[prefix].clear();
+  document.querySelectorAll('#' + prefix + '-secteur-panel input[type="checkbox"]').forEach(cb => {
+    cb.checked = false;
+    cb.closest(".multi-option").classList.remove("selected");
+  });
+  updateTrigger(prefix, previewId);
+}
+
+function resetForm(type) {
+  document.getElementById(type + "-output").classList.remove("visible");
+  if (type === "lba") {
+    document.getElementById("lba-ville").value = "";
+    document.getElementById("lba-rayon").value = "30";
+    clearMulti("lba", "lba-naf-preview");
+  }
+  if (type === "pj") {
+    document.getElementById("pj-ville").value = "";
+    document.getElementById("pj-nbmax").value = "100";
+    clearMulti("pj", null);
+  }
+  if (type === "enrich") {
+    document.getElementById("enrich-input").value = "";
+    document.getElementById("enrich-resume").value = "false";
+  }
+  if (type === "compare") {
+    document.getElementById("compare-pj").value = "";
+    document.getElementById("compare-lba").value = "";
+  }
+}
+</script>
+
+</body>
+</html>

@@ -1,0 +1,6 @@
+{
+  "villes": ["Boulogne-Billancourt", "Paris 20"],
+  "type_commerce": "agence immobilière",
+  "nb_max_resultats": 200,
+  "output": "Batch_2_0426"
+}
