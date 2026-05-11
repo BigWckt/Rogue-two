@@ -204,12 +204,14 @@ REVEAL_SELECTORS = [
     "[class*='bi-click-to']",
     "button[class*='num']",
     "a[class*='num']",
+    "[data-pjlb*='tel']",
     "[data-pjlb*='click']",
     "[class*='show-phone']",
     "[class*='phone-reveal']",
     "[class*='bi-phone-number'] button",
     ".bi-fantomas button",
     ".bi-fantomas a[href^='tel:']",
+    ".bi-fantomas a",
 ]
 
 PHONE_READ_SELECTORS = [
@@ -221,8 +223,8 @@ PHONE_READ_SELECTORS = [
     "a[href^='tel:']",
 ]
 
-REVEAL_THROTTLE_MAX = 40
-REVEAL_THROTTLE_PAUSE = 12
+REVEAL_THROTTLE_MAX = 50
+REVEAL_THROTTLE_PAUSE = 10
 
 
 def _read_phone_from_bloc(bloc) -> str:
@@ -268,7 +270,7 @@ def _try_reveal_phone(bloc, click_state: dict) -> str:
 
     try:
         btn.click(timeout=3000)
-        time.sleep(random.uniform(1.2, 2.0))
+        time.sleep(random.uniform(1.3, 1.8))
     except Exception:
         return ""
 
@@ -336,20 +338,41 @@ def parse_bloc(bloc, click_state: dict | None = None,
         tag = f"[{phone_source}]"
         print(f"      {GREEN}☎{RESET} {tag:<12s} {tel or 'VIDE'} — {nom[:50]}")
 
-    # Site web
+    # Site web (cascade de sélecteurs)
     site = ""
-    web_el = bloc.query_selector(
-        "a[class*='site'], a[class*='web'], "
-        "a[href*='http'][class*='url'], a.bi-website"
-    )
-    if web_el:
-        site = web_el.get_attribute("href") or ""
+    for wsel in [
+        "a[class*='site-internet']", "a[class*='bi-website']", "a.bi-website",
+        "a[class*='site']", "a[class*='web']",
+        "a[href*='http'][class*='url']",
+        "a[data-pjlb*='site']", "a[data-pjlb*='web']",
+        "[class*='website'] a",
+    ]:
+        try:
+            web_el = bloc.query_selector(wsel)
+            if web_el:
+                href = web_el.get_attribute("href") or ""
+                if href.startswith("http") and "pagesjaunes.fr" not in href:
+                    site = href
+                    break
+        except Exception:
+            continue
 
-    # Catégorie
-    cat_el = bloc.query_selector(
-        ".bi-activite, [class*='activite'], [class*='rubrique']"
-    )
-    categorie = cat_el.inner_text().strip() if cat_el else ""
+    # Catégorie (cascade de sélecteurs)
+    categorie = ""
+    for csel in [
+        ".bi-activite", "[class*='bi-activite']",
+        "[class*='activite']", "[class*='rubrique']",
+        "[class*='category']", "[class*='metier']",
+    ]:
+        try:
+            cat_el = bloc.query_selector(csel)
+            if cat_el:
+                text = cat_el.inner_text().strip()
+                if text and len(text) < 200:
+                    categorie = text
+                    break
+        except Exception:
+            continue
 
     return {
         "Nom de l'entreprise": nom,
