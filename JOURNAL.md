@@ -1039,3 +1039,55 @@ Affichage en fin de run : X direct (DOM), Y via clic, Z via page détail, W sans
 
 ### État final
 **Implémenté** — en attente de validation terrain ⏳
+
+---
+
+## 2026-05-12 — Fix v2 : sélecteurs renforcés + site web / catégorie + inspection DOM
+
+### Contexte
+Données confirmées par l'utilisateur :
+- `pj_batchSamya.csv` (Boulogne/Nanterre/Rueil, 508 fiches) : 477 tél (94%) ✅
+- `pj_batch5.csv` (Paris 1-20e, 440 fiches) : 0 tél ❌
+- `pj_batch2_Samya.csv` (Lyon, 477 fiches) : 0 tél ❌
+- `pj_Test.csv` (Lens, 48 fiches) : 0 tél ❌
+- Pattern supplémentaire : **Site web (~1%) et Catégorie (0%)** aussi cassés sur les mêmes fichiers.
+
+### Tentative d'inspection DOM live
+- Playwright installé dans l'environnement sandbox + Chromium
+- Cloudflare Turnstile bloque systématiquement depuis l'IP datacenter (CAPTCHA interactif requis)
+- Impossible de scraper la page réelle depuis cette sandbox
+
+### Solution : script d'inspection autonome
+- Nouveau fichier `inspect_pj_dom.py` — à lancer sur la machine Windows de l'utilisateur
+- Mode headful (`--headful`) avec résolution CAPTCHA manuelle si nécessaire
+- Inspecte 3 blocs : dump HTML complet, sélecteurs téléphone avant/après clic, site web, catégorie
+- Inspecte aussi la page de détail de la première fiche
+- Tente de cliquer tous les boutons dans `.bi-fantomas` et vérifie ce qui change
+
+### Améliorations du fix dans script_pages_jaunes.py
+
+#### Sélecteurs de révélation téléphone
+Ajout de `[data-pjlb*='tel']`, `.bi-fantomas a` (catch-all). Délai ajusté à 1.3-1.8s. Throttle ajusté à 50 clics / pause 10s.
+
+#### Site web (sélecteurs renforcés)
+Cascade de 9 sélecteurs dont `a[class*='site-internet']`, `a[data-pjlb*='site']`, `[class*='website'] a`. Filtre les liens internes PJ (`pagesjaunes.fr`).
+
+#### Catégorie (sélecteurs renforcés)
+Cascade de 6 sélecteurs dont `[class*='bi-activite']`, `[class*='category']`, `[class*='metier']`. Guard sur la longueur (< 200 chars) pour éviter les faux positifs.
+
+### Marche à suivre pour l'utilisateur
+```powershell
+# 1. Inspecter le DOM réel (Windows, Playwright requis)
+python inspect_pj_dom.py --headful
+
+# 2. Si CF bloque → résoudre le CAPTCHA manuellement → Entrée
+
+# 3. Envoyer bloc_1.html + bloc_2.html + screenshots pour ajuster les sélecteurs
+
+# 4. Tester le fix
+python script_pages_jaunes.py --ville Lyon --activite restaurant --nb-max 30 --debug
+python script_pages_jaunes.py --ville Boulogne-Billancourt --activite restaurant --nb-max 30 --debug
+```
+
+### État final
+**Implémenté** — en attente d'inspection DOM + validation terrain ⏳
