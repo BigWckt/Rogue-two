@@ -1091,3 +1091,69 @@ python script_pages_jaunes.py --ville Boulogne-Billancourt --activite restaurant
 
 ### État final
 **Implémenté** — en attente d'inspection DOM + validation terrain ⏳
+
+---
+
+## 2026-05-12 — Fix v3 : CMP AppConsent bloquait tous les clics « Afficher le N° »
+
+### Problème observé
+Après application du fix v2 (sélecteurs `btn_tel`, scroll, `wait_for_selector`), **0/10 téléphones** sur Boulogne. Logs debug muets : ni `⏱ Timeout 6s` ni `✓ .number-contact présent` — le code n'atteignait même pas le `wait_for_selector`.
+
+### Diagnostic (en 3 itérations)
+
+#### Itération 1 — Sélecteur `btn_tel` réel
+Le diag headful (`diag_phone_reveal.py`) a montré que le bouton réel n'est **pas** `[class*='click-to-call']` mais :
+```html
+<button class="button btn btn_primary btn_full_mob btn_tel normal-button">Afficher le N°</button>
+```
+→ Ajout de `button.btn_tel`, `button[class*='btn_tel']`, `[class*='btn_tel']` en tête de `REVEAL_SELECTORS`.
+
+#### Itération 2 — Bouton hors du `<li>`
+Le bouton `btn_tel` est rendu **hors** du `<li>` scrappé (sibling ou descendant de `.bi-bloc`).
+→ Ajout d'une recherche étendue via `evaluate_handle` : `nextElementSibling` → `.bi-bloc` ancêtre → `parentElement`.
+
+#### Itération 3 — Mécanisme XHR
+Diagnostic headful complet (`diag_phone_reveal.py`) :
+- Clic prog ET clic manuel produisent le **même** résultat (téléphone révélé)
+- XHR interceptée : `GET /annuaire/ajax/phone_number?id=XXX`
+- Le JS injecte ensuite `<div class="number-contact">Tél : XX XX XX XX XX</div>` dans `<div id="bi-fantomas-XXX">` et ajoute la classe `bi-fantomas-display`
+→ Remplacement de `time.sleep(2-3s)` par `wait_for_selector(".bi-fantomas-display .number-contact", timeout=6000)`.
+→ Ajout d'un `scroll_into_view_if_needed` avant clic (IntersectionObserver de PJ).
+
+#### Itération 4 — Cause racine
+Logs debug d'échec après ajout de `❌ Clic échoué : ...` :
+```
+ElementHandle.click: Timeout 3000ms exceeded.
+<iframe role="none" title="Fenêtre de consentement" srcdoc="...">
+  from <div id="appconsent">…</div> subtree intercepts pointer events
+```
+→ **L'iframe CMP AppConsent recouvrait toute la page** avec un overlay invisible interceptant tous les pointer events. Playwright refusait de cliquer (échec actionability check).
+
+### Fix final appliqué
+
+#### `_try_reveal_phone()` dans `script_pages_jaunes.py`
+- `btn.click(force=True, timeout=3000)` — bypass de la détection d'interception
+- Conservation du `scroll_into_view_if_needed` + `wait_for_selector` + fallback lecture bouton
+
+#### Suppression du CMP
+- Après warmup CF : `page.evaluate("document.querySelector('#appconsent')?.remove()")`
+- Après chaque navigation de page (le CMP peut réapparaître)
+
+### Validation terrain
+Test `python script_pages_jaunes.py --ville Boulogne-Billancourt --activite restaurant --nb-max 10 --debug` :
+```
+🔍 Bouton reveal : trouvé (scope: bloc)
+🔍 Bouton texte avant clic : 'Afficher le N°'
+🖱  Clic effectué (force=True, bypass CMP)
+✓ .number-contact présent dans le DOM après clic
+☎ [via clic]   0155198888 — Tokoyama
+```
+
+### Nouveaux outils créés
+- **`diag_phone_reveal.py`** — script standalone headful pour diagnostiquer en live (screenshot avant/après clic, dump HTML, interception XHR, test clic prog vs manuel)
+
+### Skill Claude Code créé
+- **`.claude/skills/rogue-two-conventions/SKILL.md`** — conventions du projet encodées pour les futures sessions Claude Code (environnement, scripts, règles d'édition, bugs connus, APIs, workflow).
+
+### État final
+**Fonctionnel** ✅ — phone reveal opérationnel sur grandes villes et IDF
