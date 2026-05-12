@@ -332,9 +332,9 @@ def _try_reveal_phone(bloc, click_state: dict, debug: bool = False) -> str:
         click_state["count"] = 1
 
     try:
-        btn.click(timeout=3000)
+        btn.click(force=True, timeout=3000)
         if debug:
-            print("      🖱  Clic effectué")
+            print("      🖱  Clic effectué (force=True, bypass CMP)")
     except Exception as e:
         if debug:
             print(f"      ❌ Clic échoué : {e}")
@@ -603,6 +603,12 @@ def scrape_pages_jaunes(activite: str, ville: str, nb_max: int,
         except Exception as e:
             matrix_warn(f"Warmup CF : {e}")
 
+        # Fermer le bandeau CMP AppConsent (iframe overlay qui bloque les clics)
+        try:
+            page.evaluate("document.querySelector('#appconsent')?.remove()")
+        except Exception:
+            pass
+
         # ── Boucle de pagination ──
         page_num = 1
         while len(fiches) < nb_max:
@@ -635,6 +641,12 @@ def scrape_pages_jaunes(activite: str, ville: str, nb_max: int,
                     break
                 page_num += 1
                 continue
+
+            # CMP peut réapparaître après navigation
+            try:
+                page.evaluate("document.querySelector('#appconsent')?.remove()")
+            except Exception:
+                pass
 
             # Extraire les blocs entreprise
             blocs = page.query_selector_all("li:has(.bi-content)")
