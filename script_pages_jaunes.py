@@ -245,19 +245,72 @@ def _read_phone_from_bloc(bloc) -> str:
         validated = validate_phone(raw)
         if validated:
             return validated
+
+    # Fallback : le bouton btn_tel est souvent HORS du <li> ; chercher dans
+    # les frères et l'ancêtre .bi-bloc. Après clic, son texte peut contenir
+    # le numéro révélé.
+    try:
+        btn_handle = bloc.evaluate_handle(
+            "el => el.nextElementSibling?.querySelector('.btn_tel, [class*=\"btn_tel\"]') || "
+            "el.closest('[class*=\"bi-bloc\"]')?.querySelector('.btn_tel, [class*=\"btn_tel\"]') || "
+            "el.parentElement?.querySelector('.btn_tel, [class*=\"btn_tel\"]')"
+        )
+        if btn_handle:
+            el = btn_handle.as_element()
+            if el:
+                raw = el.inner_text().strip()
+                raw = re.sub(r"^T[ée]l\s*:\s*", "", raw)
+                validated = validate_phone(raw)
+                if validated:
+                    return validated
+    except Exception:
+        pass
+
     return ""
 
 
-def _try_reveal_phone(bloc, click_state: dict) -> str:
+def _try_reveal_phone(bloc, click_state: dict, debug: bool = False) -> str:
     """
     Cherche et clique un bouton de révélation téléphone, puis re-lit le numéro.
     click_state suit le throttling {count, window_start}.
+    Le bouton btn_tel est souvent HORS du <li> scrappé — on étend la recherche
+    aux frères et à l'ancêtre .bi-bloc.
     """
     btn = None
+    found_scope = "bloc"
+
+    # Étape 1 : chercher dans le bloc lui-même
     for sel in REVEAL_SELECTORS:
         btn = bloc.query_selector(sel)
         if btn:
             break
+
+    # Étape 2 : étendre la recherche hors du <li>
+    if not btn:
+        try:
+            btn_handle = bloc.evaluate_handle(
+                "el => el.nextElementSibling?.querySelector('.btn_tel, [class*=\"btn_tel\"], [class*=\"click-to-call\"]') || "
+                "el.querySelector('.btn_tel, [class*=\"btn_tel\"], [class*=\"click-to-call\"]') || "
+                "el.closest('[class*=\"bi-bloc\"]')?.querySelector('.btn_tel, [class*=\"btn_tel\"], [class*=\"click-to-call\"]') || "
+                "el.parentElement?.querySelector('.btn_tel, [class*=\"btn_tel\"], [class*=\"click-to-call\"]')"
+            )
+            if btn_handle:
+                el = btn_handle.as_element()
+                if el:
+                    btn = el
+                    found_scope = "sibling/ancestor"
+        except Exception:
+            pass
+
+    if debug:
+        print(f"      🔍 Bouton reveal : {'trouvé' if btn else 'non trouvé'} (scope: {found_scope})")
+        if btn:
+            try:
+                txt = btn.inner_text().strip()[:40]
+                print(f"      🔍 Bouton texte avant clic : {txt!r}")
+            except Exception:
+                pass
+
     if not btn:
         return ""
 
@@ -273,11 +326,28 @@ def _try_reveal_phone(bloc, click_state: dict) -> str:
 
     try:
         btn.click(timeout=3000)
-        time.sleep(random.uniform(1.3, 1.8))
+        time.sleep(random.uniform(2.0, 3.0))
     except Exception:
         return ""
 
-    return _read_phone_from_bloc(bloc)
+    # Re-lecture standard (incluant le fallback btn_tel dans _read_phone_from_bloc)
+    phone = _read_phone_from_bloc(bloc)
+    if phone:
+        return phone
+
+    # Le texte du bouton peut avoir été remplacé par le numéro révélé
+    try:
+        raw = btn.inner_text().strip()
+        raw = re.sub(r"^T[ée]l\s*:\s*", "", raw)
+        validated = validate_phone(raw)
+        if validated:
+            if debug:
+                print(f"      🔍 Numéro lu depuis le bouton : {validated}")
+            return validated
+    except Exception:
+        pass
+
+    return ""
 
 
 # ── Parsing d'un bloc entreprise ─────────────────────────────────────────────
@@ -331,7 +401,7 @@ def parse_bloc(bloc, click_state: dict | None = None,
     # ── Téléphone — Étape B : clic de révélation ──
     if not tel and click_state is not None:
         try:
-            tel = _try_reveal_phone(bloc, click_state)
+            tel = _try_reveal_phone(bloc, click_state, debug=debug)
             if tel:
                 phone_source = "via clic"
         except Exception:
