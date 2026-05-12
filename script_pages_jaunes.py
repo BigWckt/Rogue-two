@@ -317,8 +317,9 @@ def _try_reveal_phone(bloc, click_state: dict, debug: bool = False) -> str:
     try:
         btn.scroll_into_view_if_needed(timeout=3000)
         time.sleep(random.uniform(0.3, 0.5))
-    except Exception:
-        pass
+    except Exception as e:
+        if debug:
+            print(f"      ⚠  Scroll échoué : {e}")
 
     now = time.time()
     if now - click_state.get("window_start", 0) >= 60:
@@ -332,7 +333,11 @@ def _try_reveal_phone(bloc, click_state: dict, debug: bool = False) -> str:
 
     try:
         btn.click(timeout=3000)
-    except Exception:
+        if debug:
+            print("      🖱  Clic effectué")
+    except Exception as e:
+        if debug:
+            print(f"      ❌ Clic échoué : {e}")
         return ""
 
     xhr_resolved = False
