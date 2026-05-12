@@ -314,6 +314,12 @@ def _try_reveal_phone(bloc, click_state: dict, debug: bool = False) -> str:
     if not btn:
         return ""
 
+    try:
+        btn.scroll_into_view_if_needed(timeout=3000)
+        time.sleep(random.uniform(0.3, 0.5))
+    except Exception:
+        pass
+
     now = time.time()
     if now - click_state.get("window_start", 0) >= 60:
         click_state["window_start"] = now
@@ -326,9 +332,23 @@ def _try_reveal_phone(bloc, click_state: dict, debug: bool = False) -> str:
 
     try:
         btn.click(timeout=3000)
-        time.sleep(random.uniform(2.0, 3.0))
     except Exception:
         return ""
+
+    xhr_resolved = False
+    try:
+        bloc.wait_for_selector(
+            ".bi-fantomas-display .number-contact, .bi-fantomas .number-contact",
+            timeout=6000,
+            state="visible",
+        )
+        xhr_resolved = True
+    except Exception:
+        if debug:
+            print("      ⏱  Timeout 6s — AJAX phone_number lent ou non déclenché")
+
+    if debug and xhr_resolved:
+        print("      ✓ .number-contact présent dans le DOM après clic")
 
     # Re-lecture standard (incluant le fallback btn_tel dans _read_phone_from_bloc)
     phone = _read_phone_from_bloc(bloc)
