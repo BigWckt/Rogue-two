@@ -200,6 +200,9 @@ def wait_for_pj_content(page, timeout_s: int = CF_TIMEOUT) -> bool:
 # ── Révélation téléphone (clic « Afficher le N° ») ─────────────────────────
 
 REVEAL_SELECTORS = [
+    "button.btn_tel",
+    "button[class*='btn_tel']",
+    "[class*='btn_tel']",
     "[class*='click-to-call']",
     "[class*='bi-click-to']",
     "button[class*='num']",
