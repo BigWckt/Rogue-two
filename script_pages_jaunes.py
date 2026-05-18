@@ -314,6 +314,13 @@ def _try_reveal_phone(bloc, click_state: dict, debug: bool = False) -> str:
     if not btn:
         return ""
 
+    try:
+        btn.scroll_into_view_if_needed(timeout=3000)
+        time.sleep(random.uniform(0.3, 0.5))
+    except Exception as e:
+        if debug:
+            print(f"      ⚠  Scroll échoué : {e}")
+
     now = time.time()
     if now - click_state.get("window_start", 0) >= 60:
         click_state["window_start"] = now
@@ -325,10 +332,28 @@ def _try_reveal_phone(bloc, click_state: dict, debug: bool = False) -> str:
         click_state["count"] = 1
 
     try:
-        btn.click(timeout=3000)
-        time.sleep(random.uniform(2.0, 3.0))
-    except Exception:
+        btn.click(force=True, timeout=3000)
+        if debug:
+            print("      🖱  Clic effectué (force=True, bypass CMP)")
+    except Exception as e:
+        if debug:
+            print(f"      ❌ Clic échoué : {e}")
         return ""
+
+    xhr_resolved = False
+    try:
+        bloc.wait_for_selector(
+            ".bi-fantomas-display .number-contact, .bi-fantomas .number-contact",
+            timeout=6000,
+            state="visible",
+        )
+        xhr_resolved = True
+    except Exception:
+        if debug:
+            print("      ⏱  Timeout 6s — AJAX phone_number lent ou non déclenché")
+
+    if debug and xhr_resolved:
+        print("      ✓ .number-contact présent dans le DOM après clic")
 
     # Re-lecture standard (incluant le fallback btn_tel dans _read_phone_from_bloc)
     phone = _read_phone_from_bloc(bloc)
@@ -578,6 +603,12 @@ def scrape_pages_jaunes(activite: str, ville: str, nb_max: int,
         except Exception as e:
             matrix_warn(f"Warmup CF : {e}")
 
+        # Fermer le bandeau CMP AppConsent (iframe overlay qui bloque les clics)
+        try:
+            page.evaluate("document.querySelector('#appconsent')?.remove()")
+        except Exception:
+            pass
+
         # ── Boucle de pagination ──
         page_num = 1
         while len(fiches) < nb_max:
@@ -610,6 +641,12 @@ def scrape_pages_jaunes(activite: str, ville: str, nb_max: int,
                     break
                 page_num += 1
                 continue
+
+            # CMP peut réapparaître après navigation
+            try:
+                page.evaluate("document.querySelector('#appconsent')?.remove()")
+            except Exception:
+                pass
 
             # Extraire les blocs entreprise
             blocs = page.query_selector_all("li:has(.bi-content)")
