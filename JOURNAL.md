@@ -1157,3 +1157,61 @@ Test `python script_pages_jaunes.py --ville Boulogne-Billancourt --activite rest
 
 ### État final
 **Fonctionnel** ✅ — phone reveal opérationnel sur grandes villes et IDF
+
+---
+
+## 2026-05-19 — Filtre BTPM : exclusion des entreprises non pertinentes
+
+### Problème observé
+Batches BTPM 3 et 4 : des entreprises non pertinentes remontaient dans les leads finaux — ministères, cabinets d'architecture, loueurs de voitures, mosquées, associations humanitaires. Leur code NAF matchait les profils BTPM mais leur activité réelle n'a rien à voir avec un garage / concession / carrosserie.
+
+### Diagnostic
+Les filtres existants couvrent :
+- `EXCLUSIONS_PJ` dans `script_pages_jaunes.py` : pharmacies, CHRS, CADA, FJT (secteur SB uniquement)
+- `EXCLUSIONS_ENSEIGNES` dans `batch_io.py` : enseignes nationales (MBT/TG uniquement)
+- Aucun filtre BTPM n'existait.
+
+### Fix appliqué
+
+#### `batch_io.py`
+- `EXCLUSIONS_BTPM` : dictionnaire de ~50 motifs répartis en 7 catégories :
+  - Administrations (ministère, préfecture, mairie, DDT, DREAL, etc.)
+  - Organismes sociaux (CPAM, CNAV, CARSAT, URSSAF)
+  - Lieux de culte (mosquée, église, synagogue, cathédrale, etc.)
+  - Professions intellectuelles (cabinet d'architecture/avocats/comptable, notaire, huissier, bureau d'études)
+  - Location véhicules (Hertz, Europcar, Sixt, etc.)
+  - Enseignement supérieur (université, rectorat)
+  - Associations humanitaires (droits humains, Croix-Rouge, Amnesty, etc.)
+- `_BTPM_WORD_BOUNDARY` : 7 motifs ambigus avec regex `\b...\b` (auto-école, taxi, VTC, ambulance, avis, caf)
+- `check_btpm_excluded(name)` : normalise NFD + ASCII, matche substring puis word-boundary, retourne `(motif, catégorie)` ou `(None, None)`
+
+#### `script_comparaison.py`
+- Import de `check_btpm_excluded`
+- Bloc filtre conditionné sur `secteur == "BTPM"`, placé après le filtre enseignes MBT/TG et avant le croisement SIRET
+- Appliqué sur PJ enrichi ET LBA/LBB
+- Stats avec ventilation par catégorie dans la synthèse console
+
+### Précautions anti faux-positifs
+- `police` exclu de la liste (faux positif : "police d'assurance")
+- `association` tout court exclu (trop large)
+- `école`, `collège`, `lycée` exclus (CFA du bâtiment serait filtré à tort)
+- `architecte` seul exclu (paysagiste BTP)
+- `caf` en word-boundary uniquement (sinon matche "café")
+- `temple` qualifié en `temple bouddhiste` (sinon matche "Temple Auto")
+
+### Validation (16 tests)
+| Nom | Exclu | Motif |
+|---|---|---|
+| Ministère de l'Agriculture | ✅ | ministere |
+| Trollat et Graber Cabinet d'Architecture | ✅ | cabinet d architecture |
+| Hertz Location de voiture | ✅ | location de voiture |
+| Mosquée El Fath | ✅ | mosquee |
+| Auto-École de la Gare | ✅ | auto ecole |
+| CPAM de Lyon | ✅ | cpam |
+| Garage Dupont | ❌ (conservé) | — |
+| Automobile Service Lyon | ❌ (conservé) | — |
+| CFA du Bâtiment | ❌ (conservé) | — |
+| Cafétéria du Coin | ❌ (conservé) | — |
+
+### État final
+**Fonctionnel** ✅

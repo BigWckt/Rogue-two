@@ -21,7 +21,7 @@ from datetime import date
 import pandas as pd
 from rapidfuzz import fuzz
 
-from batch_io import read_current_batch, check_naf_coherence, check_enseigne_excluded, get_naf_label
+from batch_io import read_current_batch, check_naf_coherence, check_enseigne_excluded, check_btpm_excluded, get_naf_label
 from matrix_display import (
     GREEN, RED, BOLD, RESET,
     matrix_banner, matrix_section, matrix_kv, matrix_separator,
@@ -816,6 +816,35 @@ def main():
             if len(enseigne_stats["detail"]) > 10:
                 detail += ", ..."
             print(f"      {detail}")
+
+    # ── Filtre BTPM (admin / culte / cabinets / loueurs / asso) ──
+    if secteur == "BTPM":
+        btpm_stats = {"lba_excluded": 0, "pj_excluded": 0, "by_cat": {}}
+
+        for siret in list(lba_data.keys()):
+            nom = lba_data[siret].get("Nom de l'entreprise", "")
+            motif, cat = check_btpm_excluded(nom)
+            if motif:
+                btpm_stats["lba_excluded"] += 1
+                btpm_stats["by_cat"][cat] = btpm_stats["by_cat"].get(cat, 0) + 1
+                del lba_data[siret]
+
+        for siret in list(pj_data.keys()):
+            nom = pj_data[siret].get("Nom de l'entreprise", "")
+            motif, cat = check_btpm_excluded(nom)
+            if motif:
+                btpm_stats["pj_excluded"] += 1
+                btpm_stats["by_cat"][cat] = btpm_stats["by_cat"].get(cat, 0) + 1
+                del pj_data[siret]
+
+        total_btpm = btpm_stats["lba_excluded"] + btpm_stats["pj_excluded"]
+        if total_btpm:
+            matrix_section("Exclusions BTPM (admin/culte/cabinet/loc/asso)")
+            matrix_kv("LBA/LBB exclus", str(btpm_stats["lba_excluded"]))
+            matrix_kv("PJ exclus", str(btpm_stats["pj_excluded"]))
+            cats = sorted(btpm_stats["by_cat"].items(), key=lambda x: -x[1])
+            detail_btpm = ", ".join(f"{c} ×{v}" for c, v in cats)
+            print(f"      {detail_btpm}")
 
     # ── Étape 1 : Croisement par SIRET ──
     matrix_section("Étape 1 — Croisement par SIRET")

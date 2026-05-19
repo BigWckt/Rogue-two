@@ -448,3 +448,87 @@ def check_enseigne_excluded(name: str) -> str | None:
         if re.search(rf"\b{keyword}\b", normalized):
             return keyword
     return None
+
+
+# ── Exclusions BTPM (administrations, cultes, cabinets, loueurs, asso) ─────
+# Liste évolutive — ajouter des motifs au fil des batches.
+# Matching insensible casse + accents (normalisation NFD → ASCII).
+
+EXCLUSIONS_BTPM = {
+    "Administrations": [
+        "ministere", "prefecture", "sous-prefecture",
+        "mairie", "hotel de ville",
+        "conseil departemental", "conseil regional", "conseil general",
+        "direction departementale", "ddt ", "dreal", "ddpp", "ddcs",
+        "tresor public", "dgfip", "centre des finances",
+        "service des impots",
+        "pole emploi", "france travail",
+        "gendarmerie", "commissariat",
+        "tribunal", "cour d appel", "cour de cassation",
+    ],
+    "Organismes sociaux": [
+        "cpam", "cnav", "carsat", "urssaf",
+    ],
+    "Lieux de culte": [
+        "mosquee", "eglise", "temple bouddhiste",
+        "synagogue", "cathedrale", "basilique", "chapelle",
+        "paroisse", "couvent", "monastere", "presbytere",
+    ],
+    "Professions intellectuelles": [
+        "cabinet d architecture", "cabinet d architecte",
+        "cabinet d avocats", "cabinet d avocat",
+        "cabinet comptable", "expert comptable", "expert-comptable",
+        "etude notariale", "office notarial",
+        "notaire", "huissier",
+        "bureau d etudes", "bureau d etude",
+    ],
+    "Location véhicules": [
+        "location de voiture", "location de vehicule",
+        "location automobile",
+        "hertz", "europcar", "sixt",
+        "enterprise rent", "rent a car", "ucar", "ada location",
+    ],
+    "Enseignement supérieur": [
+        "universite", "rectorat", "inspection academique",
+    ],
+    "Associations humanitaires": [
+        "droits humains", "droits de l homme",
+        "humanitaire", "croix rouge", "croix-rouge",
+        "amnesty", "amnistie",
+        "secours populaire", "restos du coeur",
+        "agir ensemble",
+        "medecins sans frontieres", "medecins du monde",
+    ],
+}
+
+_BTPM_WORD_BOUNDARY = {
+    "auto ecole": "Mobilité non garage",
+    "auto-ecole": "Mobilité non garage",
+    "taxi": "Mobilité non garage",
+    "vtc": "Mobilité non garage",
+    "ambulance": "Mobilité non garage",
+    "avis": "Location véhicules",
+    "caf": "Organismes sociaux",
+}
+
+
+def check_btpm_excluded(name: str) -> tuple[str, str] | tuple[None, None]:
+    """
+    Vérifie si un nom d'entreprise matche une exclusion BTPM.
+    Retourne (motif, catégorie) ou (None, None).
+    """
+    n = _strip_accents_bio(name.lower())
+    n = re.sub(r"[^a-z0-9 ]", " ", n)
+    n = re.sub(r"\s+", " ", n).strip()
+
+    for category, keywords in EXCLUSIONS_BTPM.items():
+        for kw in keywords:
+            if kw in n:
+                return kw, category
+
+    for kw, category in _BTPM_WORD_BOUNDARY.items():
+        pattern = re.sub(r"[^a-z0-9 ]", " ", kw)
+        if re.search(rf"\b{re.escape(pattern)}\b", n):
+            return kw, category
+
+    return None, None
