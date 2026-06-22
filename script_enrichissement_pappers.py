@@ -24,7 +24,7 @@ import pandas as pd
 import requests
 from rapidfuzz import fuzz
 
-from batch_io import read_current_batch, update_current_batch
+from batch_io import read_current_batch, update_current_batch, score_match
 from matrix_display import (
     GREEN, RED, BOLD, RESET,
     matrix_banner, matrix_section, matrix_kv, matrix_separator,
@@ -123,6 +123,8 @@ def _score_candidate(nom_query: str, cp_query: str, ville_query: str,
                      candidate: dict) -> tuple[int, str]:
     """
     Score multi-critères : nom (50%) + code postal (+30) + ville (+20).
+    Délègue à batch_io.score_match() (logique partagée avec l'enrichissement
+    SIRENE). Itère sur tous les noms exposés par Pappers et garde le meilleur.
     Retourne (score_final, meilleur_nom_trouvé).
     """
     siege = candidate.get("siege") or {}
@@ -139,35 +141,20 @@ def _score_candidate(nom_query: str, cp_query: str, ville_query: str,
     if not api_names:
         return 0, ""
 
-    # Score nom : max de ratio et token_sort_ratio après nettoyage léger + agressif
-    nom_q_clean = clean_name(nom_query)
-    nom_q_agg = clean_name_aggressive(nom_query)
-    best_name_score = 0
+    cp_api = str(siege.get("code_postal") or "").strip()
+    ville_api = str(siege.get("ville") or "").strip()
+
+    best_score = -1
     best_api_name = api_names[0]
     for api_name in api_names:
-        s1 = fuzz.ratio(nom_q_clean, clean_name(api_name))
-        s2 = fuzz.token_sort_ratio(nom_q_clean, clean_name(api_name))
-        s3 = fuzz.token_sort_ratio(nom_q_agg, clean_name_aggressive(api_name))
-        s = max(s1, s2, s3)
-        if s > best_name_score:
-            best_name_score = s
+        score, _ = score_match(
+            nom_query, api_name, cp_query, cp_api, ville_query, ville_api,
+        )
+        if score > best_score:
+            best_score = score
             best_api_name = api_name
 
-    score = best_name_score * 0.5
-
-    # Bonus code postal
-    cp_api = str(siege.get("code_postal") or "").strip()
-    if cp_query and cp_api and cp_query == cp_api:
-        score += 30
-
-    # Bonus ville
-    ville_api = str(siege.get("ville") or "").strip()
-    if ville_query and ville_api:
-        if fuzz.ratio(strip_accents(ville_query).upper(),
-                      strip_accents(ville_api).upper()) >= 80:
-            score += 20
-
-    return int(score), best_api_name
+    return int(best_score), best_api_name
 
 
 def http_get(url, params=None):

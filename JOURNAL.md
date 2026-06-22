@@ -1215,3 +1215,46 @@ Les filtres existants couvrent :
 
 ### État final
 **Fonctionnel** ✅
+
+---
+
+## 2026-06-22 — Récupération des pertes à l'enrichissement (batch fleuriste Lille+Nice)
+
+### Problème observé
+Sur 36 fleuristes scrapés par PJ (Lille + Nice), seuls **18 passaient l'enrichissement** SIRENE (50 % de perte). Diagnostic sur données réelles :
+- **9 perdus par le filtre cohérence NAF** : fleuristes mal classés au RCS sous des codes voisins (46.22Z grossiste, 47.89Z marché, 01.30Z horticulteur, 47.99B vente hors magasin).
+- **8 perdus par le matching nom < 80 %** : nom commercial PJ ≠ raison sociale SIRENE ("Oh! Les Fleurs" → 44 %, gérants en nom propre type "SACHIKO KATSURADA").
+
+### Correction 1 — Élargissement NAF du profil fleuriste
+`PROFILS_SKY["sb_fleuriste"]` passe de `["47.76"]` à `["47.76", "46.22Z", "47.89Z", "01.30Z", "47.99B"]`.
+
+Décision métier assumée : on tolère les codes "frères". Le mot-clé PJ reste "fleuriste" → le set scrapé est déjà filtré par keyword, donc desserrer la cohérence rattrape les bien-classés-ailleurs sans ramener de bruit. Commentaire ajouté au-dessus du profil pour éviter une suppression future par erreur. Aucun mécanisme spécial : la liste NAF du profil EST le bon endroit. `match_naf()` gère les codes API sans point (`46.22Z`/`4622Z` → True, vérifié).
+
+### Correction 2 — Matching multi-critères partagé (tous secteurs)
+Le seuil "80 % sur le nom seul" était trop strict dans TOUS les secteurs. Nouvelle fonction **`batch_io.score_match()`**, sector-agnostic, utilisée par les DEUX scripts d'enrichissement :
+- Similarité nom (`norm_name` + max ratio/token_sort_ratio) : 0-50 pts
+- CP exact : +30 pts
+- Ville fuzzy (≥ 80) : +20 pts
+- Retour `(score, detail)` où detail = `"nom 41 + CP 30 + ville 20"` pour audit
+- `SEUIL_MATCH = 60` (remplace le 80 % nom-seul)
+
+**Intégration** :
+- `script_enrichissement.py` (SIRENE) : `_best_match()` choisit désormais le meilleur candidat via `score_match()` (boucle candidats × noms API), seuil 60. Le filtrage cascade CP→commune→tous reste. Statut enrichi : `"SIRET trouvé (nom 41 + CP 30 + ville 20 = 91)"`.
+- `script_enrichissement_pappers.py` : `_score_candidate()` délègue à `score_match()` (même logique). Tiers de confiance Pappers conservés (HIGH 80 / LOW 60 / SINGLE_CP 50). Les 3 champs (nom/CP/ville) sont exposés au point d'appel → mapping direct, aucune invention. Règle aussi le bug Pappers "matching 0 %" du 20/04 (nom légal "MARIE BLACHERE DISTRIBUTION" vs "Boulangerie Marie Blachère" : nom 34 + CP 30 = 64 ≥ 60). Non testé en live (clé API expirée), validé par py_compile + revue.
+
+Décision normalisation : `score_match` normalise en interne (via `norm_name`), les `clean_name()` locaux des scripts ne sont pas modifiés → impact minimal sur les volumes existants.
+
+### Compromis documenté (effet de bord assumé)
+Baisser le seuil augmente le risque de matcher un mauvais SIRET dont le NAF se trouve par chance dans le profil (le filtre cohérence NAF en aval ne rattrape que les NAF hors profil). CP exact (+30) + ville (+20) limitent fortement ce risque. **Pas de garde supplémentaire ajoutée** pour l'instant.
+
+### Tests
+- `py_compile` sur les 4 fichiers modifiés : OK.
+- Tests unitaires `score_match()` :
+  - `"Oh! Les Fleurs"` / `"OH LES FLEURS"` même CP+ville → **98** (récupéré)
+  - `"Boulangerie X"` / `"ENTREPRISE SANS RAPPORT"` CP+ville différents → **17** (rejeté)
+  - `"Boulangerie Marie Blachère"` / `"MARIE BLACHERE DISTRIBUTION"` même CP → **64** (récupéré)
+  - Gérant nom propre inversé même CP+ville → **100** (récupéré)
+- `match_naf()` sur les 4 codes frères fleuriste : True.
+
+### État final
+**Fonctionnel** ✅

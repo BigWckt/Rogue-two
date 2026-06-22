@@ -22,9 +22,11 @@ from datetime import date
 
 import pandas as pd
 import requests
-from rapidfuzz import fuzz
 
-from batch_io import read_current_batch, check_naf_coherence, update_current_batch, get_naf_label
+from batch_io import (
+    read_current_batch, check_naf_coherence, update_current_batch,
+    get_naf_label, score_match, SEUIL_MATCH,
+)
 from matrix_display import (
     GREEN, RED, BOLD, RESET,
     matrix_banner, matrix_section, matrix_kv, matrix_separator,
@@ -39,7 +41,6 @@ API_URL = "https://recherche-entreprises.api.gouv.fr/search"
 API_DELAY = 1.5
 API_TIMEOUT = 15
 MAX_RETRIES = 3
-SIMILARITY_THRESHOLD = 80
 CHECKPOINT_EVERY = 25
 
 # ── Colonnes de sortie (cohérentes avec script_lba_lbb.py) ───────────────────
@@ -125,10 +126,14 @@ def clean_name(name: str) -> str:
 
 # ── Recherche SIRET ──────────────────────────────────────────────────────────
 
-def _best_match(candidates: list[dict], nom_original: str) -> dict | None:
-    """Trouve le meilleur match par similarité de nom parmi les candidats API."""
-    nom_clean = clean_name(nom_original)
-    best_score = 0
+def _best_match(candidates: list[dict], nom_original: str,
+                code_postal: str, ville: str) -> dict | None:
+    """
+    Trouve le meilleur candidat via score_match (nom + CP + ville) partagé.
+    Le choix final passe par le score composite, pas le nom seul.
+    """
+    best_score = -1
+    best_detail = ""
     best_result = None
 
     for r in candidates:
@@ -142,29 +147,37 @@ def _best_match(candidates: list[dict], nom_original: str) -> dict | None:
         if enseignes:
             api_names.append(enseignes[0])
 
+        cp_candidat = siege.get("code_postal") or ""
+        ville_candidat = siege.get("libelle_commune") or ""
+
         for api_name in api_names:
-            score = fuzz.ratio(nom_clean, clean_name(api_name))
+            score, detail = score_match(
+                nom_original, api_name,
+                code_postal, cp_candidat,
+                ville, ville_candidat,
+            )
             if score > best_score:
                 best_score = score
+                best_detail = detail
                 best_result = r
 
     if best_result is None:
         return None
 
     score_rounded = round(best_score)
-    if best_score >= SIMILARITY_THRESHOLD:
+    if best_score >= SEUIL_MATCH:
         siege = best_result.get("siege") or {}
         return {
             "siret": normalize_siret(siege.get("siret") or ""),
             "naf": siege.get("activite_principale") or "",
             "score": score_rounded,
-            "status": "SIRET trouvé",
+            "status": f"SIRET trouvé ({best_detail} = {score_rounded})",
         }
     return {
         "siret": "",
         "naf": "",
         "score": score_rounded,
-        "status": f"Exclu — similarité {score_rounded}% < {SIMILARITY_THRESHOLD}%",
+        "status": f"Exclu — similarité {score_rounded}/100 < {SEUIL_MATCH}",
     }
 
 
@@ -225,7 +238,7 @@ def search_siret(nom: str, code_postal: str, ville: str) -> dict:
     if not subset:
         subset = results
 
-    match = _best_match(subset, nom)
+    match = _best_match(subset, nom, code_postal, ville)
     if match:
         return match
 
@@ -494,7 +507,7 @@ def main():
     matrix_section("RÉSULTATS — Identités extraites de la Matrice")
     matrix_kv("Entreprises traitées", str(n_total))
     matrix_kv("SIRET trouvés", f"{n_found} ({pct})")
-    matrix_kv(f"Exclus (< {SIMILARITY_THRESHOLD}% similarité)", str(n_excluded))
+    matrix_kv(f"Exclus (< {SEUIL_MATCH}/100 score match)", str(n_excluded))
     matrix_kv("Erreurs API", str(n_errors))
     matrix_separator()
     matrix_kv("Fichier enrichi", os.path.basename(csv_path))

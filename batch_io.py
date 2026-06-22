@@ -10,6 +10,8 @@ import os
 import re
 import unicodedata
 
+from rapidfuzz import fuzz
+
 CURRENT_BATCH_FILE = ".current_batch"
 
 # ── Secteurs ─────────────────────────────────────────────────────────────────
@@ -178,6 +180,64 @@ def match_naf(code_profil: str, code_entreprise: str) -> bool:
     if len(code_profil) >= 4 and code_profil[-1].isdigit():
         return code_entreprise.startswith(code_profil)
     return False
+
+
+# ── Matching multi-critères entreprise (partagé SIRENE + Pappers) ───────────
+# Score composite nom (0-50) + CP (+30) + ville (+20). Sector-agnostic :
+# ne compare que deux entreprises, sans aucune notion de secteur ou profil.
+
+SEUIL_MATCH = 60   # seuil d'acceptation du meilleur candidat (sur 100)
+
+_NORM_NAME_SUFFIXES = [
+    "SARL", "SAS", "SASU", "SA", "EURL", "SCI", "SELARL", "SRL",
+    "SCP", "SNC", "STE", "SOCIETE", "ETS", "ETABLISSEMENT", "EI",
+]
+
+
+def norm_name(name: str) -> str:
+    """
+    Normalise un nom d'entreprise pour la comparaison floue :
+    accents supprimés, majuscules, formes juridiques retirées, espaces collés.
+    """
+    s = unicodedata.normalize("NFKD", str(name)).encode("ASCII", "ignore").decode()
+    s = s.upper().strip()
+    for suffix in _NORM_NAME_SUFFIXES:
+        s = re.sub(rf"\b{suffix}\b", "", s)
+    return re.sub(r"\s+", " ", s).strip()
+
+
+def score_match(nom_recherche: str, nom_candidat: str,
+                cp_recherche: str, cp_candidat: str,
+                ville_recherche: str, ville_candidat: str) -> tuple[float, str]:
+    """
+    Score composite de correspondance entreprise (0-100) + détail audit.
+    - Similarité nom (norm_name + max ratio/token_sort_ratio) : 0-50 pts
+    - CP exact (5 chiffres identiques) : +30 pts
+    - Ville fuzzy (≥ 80 après normalisation) : +20 pts
+    Retourne (score_total, detail) où detail = "nom 41 + CP 30 + ville 20".
+    100% sector-agnostic : ne fait que comparer deux entreprises.
+    """
+    n1, n2 = norm_name(nom_recherche), norm_name(nom_candidat)
+    if n1 and n2:
+        name_sim = max(fuzz.ratio(n1, n2), fuzz.token_sort_ratio(n1, n2))
+    else:
+        name_sim = 0
+    name_pts = round(name_sim * 0.5)
+
+    cp_r = str(cp_recherche or "").strip()
+    cp_c = str(cp_candidat or "").strip()
+    cp_pts = 30 if (cp_r and cp_c and cp_r == cp_c) else 0
+
+    ville_pts = 0
+    if ville_recherche and ville_candidat:
+        v1 = unicodedata.normalize("NFKD", str(ville_recherche)).encode("ASCII", "ignore").decode().upper().strip()
+        v2 = unicodedata.normalize("NFKD", str(ville_candidat)).encode("ASCII", "ignore").decode().upper().strip()
+        if v1 and v2 and fuzz.ratio(v1, v2) >= 80:
+            ville_pts = 20
+
+    total = name_pts + cp_pts + ville_pts
+    detail = f"nom {name_pts} + CP {cp_pts} + ville {ville_pts}"
+    return total, detail
 
 
 def check_naf_coherence(naf: str, naf_attendus: list[str]) -> bool:

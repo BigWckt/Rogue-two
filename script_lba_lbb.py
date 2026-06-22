@@ -127,7 +127,12 @@ PROFILS_SKY = {
     # ─── Secteur SB (Services / Santé / Beauté) ───
     "sb_etablissement_de_sante": ["86.10", "86.21", "86.22", "86.23", "86.90B"],
     "sb_accueil_enfants":       ["88.91A", "84.11Z"],
-    "sb_fleuriste":             ["47.76"],
+    # Codes "frères" tolérés : beaucoup de fleuristes sont mal classés au RCS
+    # (grossiste 46.22Z, marché 47.89Z, horticulteur 01.30Z, vente hors
+    # magasin 47.99B). Le mot-clé PJ reste "fleuriste" donc le set scrapé est
+    # déjà filtré ; desserrer la cohérence rattrape les bien-classés-ailleurs
+    # sans ramener de bruit. NE PAS supprimer ces codes (décision métier).
+    "sb_fleuriste":             ["47.76", "46.22Z", "47.89Z", "01.30Z", "47.99B"],
     "sb_service_a_la_personne": ["87.10A", "87.10C", "87.30", "88.10A"],
     "sb_coiffure":              ["96.02"],
     "sb_esthetique":            ["96.02A", "96.02B"],
