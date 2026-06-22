@@ -1256,6 +1256,25 @@ Baisser le seuil augmente le risque de matcher un mauvais SIRET dont le NAF se t
   - Gérant nom propre inversé même CP+ville → **100** (récupéré)
 - `match_naf()` sur les 4 codes frères fleuriste : True.
 
+### Complément 2 — 2 bugs sur score_match / son intégration (re-batch fleuriste)
+
+Après mise en service, quasiment plus aucun SIRET validé. Diagnostic :
+
+**Bug 1 — composante ville toujours à 0 (critique).** Le détail affichait `ville 0` sur toutes les fiches (ex: "AU DIPLADENIA 2" à Lille), plafonnant le score à 80 (nom 50 + CP 30) et excluant toute fiche au nom commercial ≠ raison sociale — précisément les fiches à récupérer.
+- Champs candidats vérifiés contre la doc API : `siege.libelle_commune` (ville) et `siege.code_postal` (CP) sont **corrects** côté SIRENE. La fonction `score_match()` créditait bien +20 quand les deux villes sont renseignées (test unitaire "Lille"/"LILLE" → 100).
+- Cause réelle : côté **recherche**, `fiche["Ville"]` était vide (parsing d'adresse PJ dégradé, même origine que le bug téléphone — DOM PJ modifié), alors que `fiche["Ville de recherche"]` (ville du scraping) est toujours renseignée.
+- Fix : `ville = fiche.get("Ville") or fiche.get("Ville de recherche")` dans les 2 scripts d'enrichissement (SIRENE + Pappers). Plus robustesse `score_match` : comparaison ville via `max(ratio, partial_ratio, token_set_ratio)` pour tolérer "PARIS"/"PARIS 15", "LILLE"/"LILLE CEDEX". Log de debug optionnel (`ENRICH_DEBUG=1`) affichant `ville_recherche` / `ville_candidat` / CP au point d'appel.
+
+**Bug 2 — glyphe ✗ sur les lignes qui réussissent.** Le statut produit par `_best_match` contient désormais le détail audit (`"SIRET trouvé (nom 50 + CP 30 + ville 20 = 100)"`), mais 4 endroits testaient encore l'égalité stricte `== "SIRET trouvé"` :
+- glyphe console (affichait ✗ au lieu de ✓) ;
+- **filtre cohérence NAF** (`continue` sur toutes les lignes → filtre NAF inopérant, régression silencieuse) ;
+- comptage `n_found` de la synthèse (aurait affiché 0).
+- Fix : dériver du booléen réel — glyphe et filtre NAF basés sur `result["siret"]` / `row["SIRET"]` non vide ; `n_found` via `startswith("SIRET trouvé")`.
+
+Barème (50/30/20) et seuil (60) **inchangés** : le problème n'était pas le barème mais la ville morte et des comparaisons de statut fragiles.
+
+Tests : `py_compile` OK ; `score_match("Au Dipladenia 2","AU DIPLADENIA 2","59800","59800","Lille","LILLE")` → ville 20, total 100 ; candidat ville vide → ville 0 ; "Paris"/"Paris 15" et "Lille"/"Lille Cedex" → ville 20.
+
 ### Complément — Mapping ROME des codes frères fleuriste
 
 Effet de bord de la correction 1 : les 4 codes frères (46.22Z, 47.89Z, 47.99B, 01.30Z) n'avaient pas d'entrée dans `NAF_TO_ROME`, causant des warnings parasites `[!] Code NAF « XX.XXZ » non résolu — ignoré` au démarrage de `script_lba_lbb.py`. Le run fonctionnait (47.76 → D1209 suffit) mais les codes ROME liés à la fleur/horticulture n'étaient pas requêtés sur l'API LBA/LBB.

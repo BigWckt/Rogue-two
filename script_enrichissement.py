@@ -150,6 +150,11 @@ def _best_match(candidates: list[dict], nom_original: str,
         cp_candidat = siege.get("code_postal") or ""
         ville_candidat = siege.get("libelle_commune") or ""
 
+        if os.environ.get("ENRICH_DEBUG"):
+            print(f"\n      [debug] ville_recherche={ville!r} | "
+                  f"ville_candidat={ville_candidat!r} | "
+                  f"cp_recherche={code_postal!r} | cp_candidat={cp_candidat!r}")
+
         for api_name in api_names:
             score, detail = score_match(
                 nom_original, api_name,
@@ -414,7 +419,9 @@ def main():
     for i, fiche in enumerate(fiches, 1):
         nom = fiche.get("Nom de l'entreprise", "")
         cp = fiche.get("Code Postal", "")
-        ville = fiche.get("Ville", "")
+        # "Ville" par fiche peut être vide si le parsing d'adresse PJ a échoué ;
+        # "Ville de recherche" (ville du scraping) est toujours renseignée.
+        ville = fiche.get("Ville", "") or fiche.get("Ville de recherche", "")
 
         key = (nom.lower(), cp)
         if key in already_done:
@@ -432,7 +439,9 @@ def main():
         row["Statut enrichissement"] = result["status"]
         row["Score similarité"] = str(result["score"]) if result["score"] else ""
 
-        if result["status"] == "SIRET trouvé":
+        # Le glyphe dérive du SIRET trouvé, pas du libellé exact du statut
+        # (qui contient désormais le détail audit "nom X + CP Y + ville Z").
+        if result["siret"]:
             print(f"{GREEN}✓{RESET}")
             matrix_decode(f"{nom[:50]} → {result['siret']} ({result['score']}%)", prefix=f"    {GREEN}SIRET ▸{RESET} ")
         elif result["status"].startswith("Exclu — erreur"):
@@ -459,7 +468,9 @@ def main():
     if naf_attendus:
         matrix_section("Filtre cohérence NAF")
         for row in enriched_rows:
-            if row.get("Statut enrichissement") != "SIRET trouvé":
+            # On ne contrôle le NAF que des fiches ayant obtenu un SIRET
+            # (indépendant du libellé exact du statut).
+            if not row.get("SIRET"):
                 continue
             naf = row.get("Code NAF", "").strip()
             if not naf:
@@ -500,7 +511,7 @@ def main():
 
     # ── Synthèse ──
     n_total = len(enriched_rows)
-    n_found = sum(1 for r in enriched_rows if r.get("Statut enrichissement") == "SIRET trouvé")
+    n_found = sum(1 for r in enriched_rows if r.get("Statut enrichissement", "").startswith("SIRET trouvé"))
     n_excluded = sum(1 for r in enriched_rows if r.get("Statut enrichissement", "").startswith("Exclu"))
     pct = f"{n_found / n_total * 100:.0f}%" if n_total else "0%"
 

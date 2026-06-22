@@ -409,7 +409,7 @@ def run_compare(fiches: list[dict], api_key: str, output_dir: str, filename: str
     for i, fiche in enumerate(fiches, 1):
         nom = fiche.get("Nom de l'entreprise", "")
         cp = fiche.get("Code Postal", "")
-        ville = fiche.get("Ville", "")
+        ville = fiche.get("Ville", "") or fiche.get("Ville de recherche", "")
         siret_sirene = normalize_siret(fiche.get("SIRET", ""))
 
         print(f"    {GREEN}[{i}/{len(fiches)}]{RESET} {nom[:50]}...", end=" ", flush=True)
@@ -505,7 +505,7 @@ def run_enrich(fiches: list[dict], api_key: str, output_dir: str, filename: str,
     for i, fiche in enumerate(fiches, 1):
         nom = fiche.get("Nom de l'entreprise", "")
         cp = fiche.get("Code Postal", "")
-        ville = fiche.get("Ville", "")
+        ville = fiche.get("Ville", "") or fiche.get("Ville de recherche", "")
 
         key = (nom.lower(), cp)
         if key in resume_data:

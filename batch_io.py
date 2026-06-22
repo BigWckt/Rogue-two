@@ -232,8 +232,16 @@ def score_match(nom_recherche: str, nom_candidat: str,
     if ville_recherche and ville_candidat:
         v1 = unicodedata.normalize("NFKD", str(ville_recherche)).encode("ASCII", "ignore").decode().upper().strip()
         v2 = unicodedata.normalize("NFKD", str(ville_candidat)).encode("ASCII", "ignore").decode().upper().strip()
-        if v1 and v2 and fuzz.ratio(v1, v2) >= 80:
-            ville_pts = 20
+        # max de ratio/partial/token_set : tolère "PARIS"/"PARIS 15",
+        # "LILLE"/"LILLE CEDEX", ordre des mots, etc.
+        if v1 and v2:
+            ville_sim = max(
+                fuzz.ratio(v1, v2),
+                fuzz.partial_ratio(v1, v2),
+                fuzz.token_set_ratio(v1, v2),
+            )
+            if ville_sim >= 80:
+                ville_pts = 20
 
     total = name_pts + cp_pts + ville_pts
     detail = f"nom {name_pts} + CP {cp_pts} + ville {ville_pts}"
