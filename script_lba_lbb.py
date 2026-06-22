@@ -64,8 +64,12 @@ NAF_TO_ROME = {
     "96.02A": ["D1202"], "96.02B": ["D1208"],
     # Pharmacie
     "47.73Z": ["J1307"],
-    # Fleuriste
+    # Fleuriste + codes frères (grossiste, marché, vente hors magasin)
     "47.76Z": ["D1209"],
+    "46.22Z": ["D1209", "D1402"],   # Commerce de gros de fleurs et plantes
+    "47.89Z": ["D1209", "D1212"],   # Commerce sur marchés (fleurs incluses)
+    "47.99B": ["D1209", "D1212"],   # Vente hors magasin (fleurs)
+    "01.30Z": ["A1414", "A1416"],   # Reproduction de plantes / horticulture
     # Bijoutiers
     "95.25Z": ["I1401"],
     "47.77Z": ["D1214"],

@@ -1256,5 +1256,19 @@ Baisser le seuil augmente le risque de matcher un mauvais SIRET dont le NAF se t
   - Gérant nom propre inversé même CP+ville → **100** (récupéré)
 - `match_naf()` sur les 4 codes frères fleuriste : True.
 
+### Complément — Mapping ROME des codes frères fleuriste
+
+Effet de bord de la correction 1 : les 4 codes frères (46.22Z, 47.89Z, 47.99B, 01.30Z) n'avaient pas d'entrée dans `NAF_TO_ROME`, causant des warnings parasites `[!] Code NAF « XX.XXZ » non résolu — ignoré` au démarrage de `script_lba_lbb.py`. Le run fonctionnait (47.76 → D1209 suffit) mais les codes ROME liés à la fleur/horticulture n'étaient pas requêtés sur l'API LBA/LBB.
+
+Ajouts dans `NAF_TO_ROME` :
+| NAF | ROME | Description |
+|---|---|---|
+| 46.22Z | D1209, D1402 | Commerce de gros de fleurs et plantes |
+| 47.89Z | D1209, D1212 | Commerce sur marchés (fleurs incluses) |
+| 47.99B | D1209, D1212 | Vente hors magasin (fleurs) |
+| 01.30Z | A1414, A1416 | Reproduction de plantes / horticulture |
+
+**Check de complétude NAF_TO_ROME sur TOUS les profils** : après ajout, **aucun autre profil n'a de trou** (0 codes manquants sur les 25 profils de PROFILS_SKY).
+
 ### État final
 **Fonctionnel** ✅
