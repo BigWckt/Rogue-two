@@ -1329,3 +1329,47 @@ ROME_OVERRIDES = {
 
 ### État final
 **Fonctionnel** ✅
+
+---
+
+## 2026-06-23 — Fix enrichissement groupes nationaux (scoring établissement vs siège)
+
+### Problème observé
+Sur un batch crèches (411 fiches), **116 fiches exclues à score pile 50** (= nom 50 + CP 0 + ville 0). Toutes sont des groupes nationaux (Babilou, Les Petits Chaperons Rouges, La Maison Bleue, People&Baby...) dont le siège social est à Paris alors que l'établissement scrapé par PJ est en banlieue/province.
+
+**Cause racine** : `_best_match()` scorait CP + ville contre le **siège** de l'unité légale uniquement. L'API recherche-entreprises renvoie un champ `matching_etablissements` (liste des établissements correspondant à la recherche) qu'on ignorait.
+
+### Diagnostic
+- Confirmé via la doc API (modèle Pydantic sur GitHub `annuaire-entreprises-data-gouv-fr/search-api`) : `matching_etablissements` est une `list[Etablissement] | None` avec `siret`, `code_postal`, `libelle_commune`, `etat_administratif`, `activite_principale`.
+- Pappers `/recherche` ne renvoie **pas** d'établissements multiples (champ supprimé en v2) → fix limité à `script_enrichissement.py` (API SIRENE). Pappers non impacté.
+
+### Correction (script_enrichissement.py)
+**Nouvelle fonction `_best_etablissement(candidate, cp, ville)`** :
+- Collecte les entrées de `matching_etablissements` + le siège.
+- Tri par `(cp_exact, actif, score_loc)` décroissant : un CP exact l'emporte toujours ; à CP égal, un établissement actif ("A") est préféré à un fermé ("F") ; à égalité, la meilleure ville fuzzy départage.
+- Fallback sur le siège si `matching_etablissements` vide/absent → comportement identique à l'ancien code pour les TPE mono-établissement.
+
+**`_best_match()` modifié** :
+- Le nom est toujours scoré contre la dénomination de l'UL (inchangé).
+- CP + ville sont scorés contre le meilleur établissement (via `_best_etablissement`), pas le siège.
+- Le **SIRET retenu** est celui de l'établissement local (pas le siège). Détail audit enrichi : `"nom 50 + CP 30 + ville 20 = 100 (établissement 91120, pas siège)"`.
+
+**`_filter_by_cp()` / `_filter_by_commune()` modifiés** :
+- Vérifient aussi `matching_etablissements`, pas seulement `siege.code_postal`. Sans ce fix, les groupes nationaux étaient éliminés dès le pré-filtre CP avant même d'atteindre `_best_match`.
+
+### Portée Pappers
+L'API Pappers v2 `/recherche` ne renvoie pas les établissements multiples (champ retiré). Le fix ne s'applique qu'à `script_enrichissement.py`. Si Pappers ajoute ce champ à l'avenir, la même logique pourra être portée dans `_score_candidate()`.
+
+### Tests
+- `py_compile` : OK.
+- Tests unitaires (6 cas) :
+  - Babilou (siège Paris 75008, établ. Palaiseau 91120) → score **100**, SIRET établissement local retenu → **OK**
+  - TPE mono-établissement (fleuriste Lille) → score 98, SIRET siège, pas de suffix → **non-régression OK**
+  - `_filter_by_cp` via matching_etablissements → Babilou trouvé au CP 91120 → **OK**
+  - `_filter_by_commune` via matching_etablissements → Babilou trouvé à Palaiseau → **OK**
+  - Établissement fermé seul au bon CP → SIRET fermé retenu (pas d'alternative) → **OK**
+  - Siège au bon CP → pas de suffix "établissement" → **OK**
+- Pas de re-run live (API 503 depuis sandbox datacenter).
+
+### État final
+**Fonctionnel** ✅

@@ -126,15 +126,70 @@ def clean_name(name: str) -> str:
 
 # ── Recherche SIRET ──────────────────────────────────────────────────────────
 
+def _best_etablissement(candidate: dict, code_postal: str, ville: str) -> dict:
+    """
+    Parmi matching_etablissements + siège, retourne l'établissement dont la
+    localisation (CP + ville) colle le mieux à la fiche PJ.
+
+    Règles :
+      - Un établissement actif (etat_administratif="A") est préféré à un fermé
+        ("F") à CP égal.
+      - Un CP exact l'emporte toujours sur un CP différent, quelle que soit la
+        ville fuzzy.
+      - Fallback sur le siège si matching_etablissements est vide/absent.
+
+    Retourne {"siret", "code_postal", "libelle_commune", "activite_principale",
+              "is_siege": bool}.
+    """
+    siege = candidate.get("siege") or {}
+    etabs = candidate.get("matching_etablissements") or []
+
+    entries = []
+    for e in etabs:
+        entries.append({
+            "siret": e.get("siret") or "",
+            "code_postal": e.get("code_postal") or "",
+            "libelle_commune": e.get("libelle_commune") or "",
+            "activite_principale": e.get("activite_principale") or siege.get("activite_principale") or "",
+            "actif": (e.get("etat_administratif") or "A") == "A",
+            "is_siege": False,
+        })
+    entries.append({
+        "siret": siege.get("siret") or "",
+        "code_postal": siege.get("code_postal") or "",
+        "libelle_commune": siege.get("libelle_commune") or "",
+        "activite_principale": siege.get("activite_principale") or "",
+        "actif": True,
+        "is_siege": True,
+    })
+
+    cp_r = str(code_postal or "").strip()
+
+    def _loc_key(e):
+        cp_match = bool(cp_r and e["code_postal"] == cp_r)
+        score, _ = score_match(
+            "A", "A", code_postal, e["code_postal"], ville, e["libelle_commune"],
+        )
+        return (cp_match, e["actif"], score)
+
+    entries.sort(key=_loc_key, reverse=True)
+    return entries[0]
+
+
 def _best_match(candidates: list[dict], nom_original: str,
                 code_postal: str, ville: str) -> dict | None:
     """
     Trouve le meilleur candidat via score_match (nom + CP + ville) partagé.
-    Le choix final passe par le score composite, pas le nom seul.
+
+    Pour chaque unité légale candidate, la localisation (CP + ville) est scorée
+    contre le MEILLEUR établissement de matching_etablissements (pas seulement
+    le siège). Le SIRET retenu est celui de cet établissement local — crucial
+    pour les groupes nationaux (siège à Paris, crèche en province).
     """
     best_score = -1
     best_detail = ""
     best_result = None
+    best_etab = None
 
     for r in candidates:
         api_names = []
@@ -147,13 +202,16 @@ def _best_match(candidates: list[dict], nom_original: str,
         if enseignes:
             api_names.append(enseignes[0])
 
-        cp_candidat = siege.get("code_postal") or ""
-        ville_candidat = siege.get("libelle_commune") or ""
+        etab = _best_etablissement(r, code_postal, ville)
+        cp_candidat = etab["code_postal"]
+        ville_candidat = etab["libelle_commune"]
 
         if os.environ.get("ENRICH_DEBUG"):
+            src = "siège" if etab["is_siege"] else f"établ. {etab['code_postal']}"
             print(f"\n      [debug] ville_recherche={ville!r} | "
                   f"ville_candidat={ville_candidat!r} | "
-                  f"cp_recherche={code_postal!r} | cp_candidat={cp_candidat!r}")
+                  f"cp_recherche={code_postal!r} | cp_candidat={cp_candidat!r} "
+                  f"| source={src}")
 
         for api_name in api_names:
             score, detail = score_match(
@@ -165,18 +223,21 @@ def _best_match(candidates: list[dict], nom_original: str,
                 best_score = score
                 best_detail = detail
                 best_result = r
+                best_etab = etab
 
-    if best_result is None:
+    if best_result is None or best_etab is None:
         return None
 
     score_rounded = round(best_score)
     if best_score >= SEUIL_MATCH:
-        siege = best_result.get("siege") or {}
+        siret = normalize_siret(best_etab["siret"])
+        naf = best_etab["activite_principale"]
+        suffix = "" if best_etab["is_siege"] else f" (établissement {best_etab['code_postal']}, pas siège)"
         return {
-            "siret": normalize_siret(siege.get("siret") or ""),
-            "naf": siege.get("activite_principale") or "",
+            "siret": siret,
+            "naf": naf,
             "score": score_rounded,
-            "status": f"SIRET trouvé ({best_detail} = {score_rounded})",
+            "status": f"SIRET trouvé ({best_detail} = {score_rounded}{suffix})",
         }
     return {
         "siret": "",
@@ -186,23 +247,37 @@ def _best_match(candidates: list[dict], nom_original: str,
     }
 
 
+def _has_cp(candidate: dict, code_postal: str) -> bool:
+    """Vérifie si le siège OU un des matching_etablissements a ce CP."""
+    if (candidate.get("siege") or {}).get("code_postal", "") == code_postal:
+        return True
+    for e in (candidate.get("matching_etablissements") or []):
+        if (e.get("code_postal") or "") == code_postal:
+            return True
+    return False
+
+
+def _has_commune(candidate: dict, ville_lower: str) -> bool:
+    """Vérifie si le siège OU un des matching_etablissements est dans cette commune."""
+    if ville_lower in ((candidate.get("siege") or {}).get("libelle_commune") or "").lower():
+        return True
+    for e in (candidate.get("matching_etablissements") or []):
+        if ville_lower in (e.get("libelle_commune") or "").lower():
+            return True
+    return False
+
+
 def _filter_by_cp(results: list[dict], code_postal: str) -> list[dict]:
     if not code_postal:
         return []
-    return [
-        r for r in results
-        if (r.get("siege") or {}).get("code_postal", "") == code_postal
-    ]
+    return [r for r in results if _has_cp(r, code_postal)]
 
 
 def _filter_by_commune(results: list[dict], ville: str) -> list[dict]:
     if not ville:
         return []
     ville_lower = ville.lower().strip()
-    return [
-        r for r in results
-        if ville_lower in ((r.get("siege") or {}).get("libelle_commune") or "").lower()
-    ]
+    return [r for r in results if _has_commune(r, ville_lower)]
 
 
 def search_siret(nom: str, code_postal: str, ville: str) -> dict:
