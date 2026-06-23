@@ -114,6 +114,8 @@ NAF_TO_ROME = {
     "88.91A": ["K1303", "G1202"],
     # ─── Administration publique ───
     "84.11Z": ["K1404", "K1602"],
+    # ─── Enseignement pré-primaire (écoles maternelles) ───
+    "85.10Z": ["K1202", "K1303"],
     # ─── Tertiaire / Grande distribution (NAF 47.xx) ───
     "47.30Z": ["G1502"],
     "47.41Z": ["D1211"], "47.42Z": ["D1211"], "47.43Z": ["D1211"],
@@ -125,12 +127,33 @@ NAF_TO_ROME = {
     "47.79Z": ["D1212"],
 }
 
+# ── Overrides ROME par profil ───────────────────────────────────────────────
+# Certains codes NAF sont partagés entre profils mais doivent résoudre vers des
+# ROME différents selon le contexte métier. Exemple : 84.11Z (Administration
+# publique générale) sert au BTPM pour cibler les marchés publics (K1404/K1602),
+# mais pour l'accueil d'enfants on veut la petite enfance municipale
+# (crèches/RAM municipaux) → K1202/K1303. Un override s'applique UNIQUEMENT quand
+# un seul profil est sélectionné ; en multi-profil, le mapping global de
+# NAF_TO_ROME prévaut (pas de régression BTPM).
+#
+# CAS NON GÉRÉ (et qui n'a pas à l'être) : « 84.11Z demandé par
+# sb_accueil_enfants ET par un profil BTPM dans le même run ». Les deux veulent
+# des ROME contradictoires pour le même NAF — il n'y a pas de résolution
+# correcte possible. Hypothèse métier : on ne mélange JAMAIS un profil SB et un
+# profil BTPM dans un même run, donc cette collision ne se produit pas. En
+# multi-profil l'override est de toute façon désactivé (warning émis dans main).
+ROME_OVERRIDES = {
+    "sb_accueil_enfants": {
+        "84.11Z": ["K1202", "K1303"],   # Petite enfance municipale (pas l'admin générale)
+    },
+}
+
 # ── Profils sectoriels Skill & You ──────────────────────────────────────────
 
 PROFILS_SKY = {
     # ─── Secteur SB (Services / Santé / Beauté) ───
     "sb_etablissement_de_sante": ["86.10", "86.21", "86.22", "86.23", "86.90B"],
-    "sb_accueil_enfants":       ["88.91A", "84.11Z"],
+    "sb_accueil_enfants":       ["88.91A", "84.11Z", "85.10Z"],
     # Codes "frères" tolérés : beaucoup de fleuristes sont mal classés au RCS
     # (grossiste 46.22Z, marché 47.89Z, horticulteur 01.30Z, vente hors
     # magasin 47.99B). Le mot-clé PJ reste "fleuriste" donc le set scrapé est
@@ -368,12 +391,20 @@ def geocode(ville: str) -> tuple[float, float]:
 
 # ── Résolution NAF → ROME ────────────────────────────────────────────────────
 
-def resolve_rome_codes(naf_codes: list[str]) -> list[str]:
+def resolve_rome_codes(naf_codes: list[str], profile_name: str | None = None) -> list[str]:
     """Convertit une liste de codes NAF en codes ROME uniques.
-    Supporte les codes classe sans lettre (ex: '86.10' → toutes les sous-classes)."""
+    Supporte les codes classe sans lettre (ex: '86.10' → toutes les sous-classes).
+
+    Si profile_name est fourni et qu'un override existe pour ce profil/NAF
+    (ROME_OVERRIDES), il prévaut sur le mapping global NAF_TO_ROME. Utilisé pour
+    désambiguïser les codes NAF partagés (ex: 84.11Z accueil enfants vs BTPM)."""
+    overrides = ROME_OVERRIDES.get(profile_name, {}) if profile_name else {}
     rome_set = set()
     for naf in naf_codes:
         naf = naf.strip()
+        if naf in overrides:
+            rome_set.update(overrides[naf])
+            continue
         if naf in NAF_TO_ROME:
             rome_set.update(NAF_TO_ROME[naf])
             continue
@@ -648,8 +679,9 @@ def _resolve_profiles(profile_names: list[str]) -> tuple[list[str], str]:
     return naf_codes, label
 
 
-def interactive_profile_menu() -> tuple[list[str], str]:
-    """Menu interactif pour choisir un ou plusieurs profils Skill & You."""
+def interactive_profile_menu() -> tuple[list[str], str, list[str]]:
+    """Menu interactif pour choisir un ou plusieurs profils Skill & You.
+    Retourne (naf_codes, label, profile_names)."""
     print()
     matrix_section("Sélection du profil sectoriel Skill & You")
     names = sorted(PROFILS_SKY.keys())
@@ -682,7 +714,8 @@ def interactive_profile_menu() -> tuple[list[str], str]:
                 matrix_fail(f"Profil inconnu : « {part} »")
                 sys.exit(1)
 
-    return _resolve_profiles(selected)
+    naf_codes, label = _resolve_profiles(selected)
+    return naf_codes, label, selected
 
 
 def _resolve_batch_output(args, profile_names: list[str], batch_name: str | None = None,
@@ -838,11 +871,11 @@ def interactive_menu(args) -> tuple[list[str], list[str], int, str, str | None, 
     # 5. Résolution batch
     output_dir, _, _ = _resolve_batch_output(args, selected, naf_codes=naf_codes)
 
-    return villes, naf_codes, rayon, output_dir, profile_label, output_name
+    return villes, naf_codes, rayon, output_dir, profile_label, output_name, selected
 
 
-def load_config(args) -> tuple[list[str], list[str], int, str, str | None]:
-    """Retourne (villes, naf_codes, rayon, output_dir, profile_label)."""
+def load_config(args) -> tuple[list[str], list[str], int, str, str | None, list[str]]:
+    """Retourne (villes, naf_codes, rayon, output_dir, profile_label, profile_names)."""
     profile_label = None
     profile_names: list[str] = []
     batch_name = None
@@ -868,7 +901,7 @@ def load_config(args) -> tuple[list[str], list[str], int, str, str | None]:
         elif "codes_naf" in cfg:
             naf_codes = cfg["codes_naf"]
         else:
-            naf_codes, profile_label = interactive_profile_menu()
+            naf_codes, profile_label, profile_names = interactive_profile_menu()
 
         rayon = cfg.get("rayon_km", 30)
         batch_name = cfg.get("batch_name")
@@ -878,14 +911,14 @@ def load_config(args) -> tuple[list[str], list[str], int, str, str | None]:
         if args.naf:
             naf_codes = args.naf
         else:
-            naf_codes, profile_label = interactive_profile_menu()
+            naf_codes, profile_label, profile_names = interactive_profile_menu()
     else:
         matrix_fail("Spécifiez --ville (+ --naf ou profil), ou --config")
         sys.exit(1)
 
     output_dir, _, _ = _resolve_batch_output(args, profile_names, batch_name=batch_name,
                                              naf_codes=naf_codes)
-    return villes, naf_codes, rayon, output_dir, profile_label
+    return villes, naf_codes, rayon, output_dir, profile_label, profile_names
 
 
 # ── Main ──────────────────────────────────────────────────────────────────────
@@ -895,9 +928,9 @@ def main():
     if args.quiet:
         set_quiet(True)
     if not args.config and not args.ville:
-        villes, naf_codes, rayon, output_dir, profile_label, output_name = interactive_menu(args)
+        villes, naf_codes, rayon, output_dir, profile_label, output_name, profile_names = interactive_menu(args)
     else:
-        villes, naf_codes, rayon, output_dir, profile_label = load_config(args)
+        villes, naf_codes, rayon, output_dir, profile_label, profile_names = load_config(args)
         output_name = None
 
     multi = len(villes) > 1
@@ -951,7 +984,27 @@ def main():
             sys.exit(0)
 
     # Résolution NAF → ROME
-    rome_codes = resolve_rome_codes(naf_codes)
+    # L'override ROME (ROME_OVERRIDES) ne s'applique qu'en run mono-profil : on
+    # ne sait à quel profil rattacher un NAF que si un seul profil est en jeu.
+    # Sites d'appel qui transmettent profile_name : menu interactif, --config
+    # avec « profil »/« profils », CLI avec profil nommé. Sites qui passent None
+    # (override inactif, comportement NAF_TO_ROME global) : --naf brut sans
+    # profil, --config avec « codes_naf », et tout run multi-profil.
+    active_profile = profile_names[0] if len(profile_names) == 1 else None
+
+    # Garde-fou : si un run multi-profil contient un profil porteur d'override,
+    # prévenir que l'override est désactivé (risque de bruit). Pas de blocage.
+    if len(profile_names) > 1:
+        for name in profile_names:
+            if name in ROME_OVERRIDES:
+                nafs = ", ".join(ROME_OVERRIDES[name])
+                matrix_warn(
+                    f"{name} possède un override ROME ({nafs} → résolution dédiée) "
+                    f"qui est DÉSACTIVÉ en run multi-profil. Risque de bruit. "
+                    f"Lancer ce profil seul pour bénéficier de l'override."
+                )
+
+    rome_codes = resolve_rome_codes(naf_codes, profile_name=active_profile)
     if not rome_codes:
         matrix_fail("Aucun code ROME trouvé pour les NAF fournis")
         sys.exit(1)

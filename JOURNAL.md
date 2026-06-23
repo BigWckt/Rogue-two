@@ -1291,3 +1291,41 @@ Ajouts dans `NAF_TO_ROME` :
 
 ### État final
 **Fonctionnel** ✅
+
+---
+
+## 2026-06-22 — Désambiguïsation ROME du profil sb_accueil_enfants (84.11Z partagé)
+
+### Problème observé
+Un run LBA/LBB sur garde d'enfant remontait **1378 fiches dont 1019 hors profil (74 % de bruit)** : mairies, préfectures, conseils départementaux. Cause : `84.11Z` (Administration publique générale) est mappé globalement vers `["K1404", "K1602"]` (ROME administration/collectivités), mais il est **partagé** par 4 profils BTPM (`btpm_batiment`, `btpm_electricite`, `btpm_menuiserie`, `btpm_meca_carrosserie`) qui en ont besoin pour cibler les marchés publics BTP. Impossible de changer le mapping global sans casser le BTPM.
+
+### Point d'architecture — `ROME_OVERRIDES` par profil
+Le nom du profil est perdu avant `resolve_rome_codes()` (la fonction ne reçoit qu'une liste de NAF dédupliquée). Solution retenue : un dict d'overrides ROME **par profil**, appliqué uniquement en run mono-profil.
+
+```python
+ROME_OVERRIDES = {
+    "sb_accueil_enfants": {"84.11Z": ["K1202", "K1303"]},  # petite enfance municipale
+}
+```
+
+- `resolve_rome_codes(naf_codes, profile_name=None)` : si un override existe pour `profile_name`/NAF, il prévaut ; sinon mapping global `NAF_TO_ROME` (comportement inchangé).
+- `active_profile = profile_names[0] if len(profile_names) == 1 else None` dans `main()` : l'override ne s'applique qu'en run mono-profil (on ne sait à quel profil rattacher un NAF que si un seul profil est en jeu).
+
+### Garde-fous
+1. **Tous les points d'entrée transmettent le profil.** Les signatures de `interactive_menu`, `interactive_profile_menu` et `load_config` retournent désormais la liste des profils résolus jusqu'à `main()`. Transmettent `profile_name` : menu interactif mono-profil, `--config` avec `profil`/`profils`. Passent `None` (override inactif, mapping global — **acceptable**) : `--ville --naf` brut, `--config` avec `codes_naf`, et tout run multi-profil. (Pas de flag `--profil` en CLI : les profils ne viennent que du menu ou du `--config`.)
+2. **Warning si override désactivé en multi-profil.** Si un run combine plusieurs profils dont au moins un porteur d'override, `main()` émet un `matrix_warn` explicite (override désactivé, risque de bruit, lancer le profil seul). Pas de blocage — éviter le silence.
+3. **Cas non géré documenté.** « 84.11Z demandé par `sb_accueil_enfants` ET un profil BTPM dans le même run » → destinations ROME contradictoires, sans résolution correcte possible. Hypothèse métier documentée au-dessus de `ROME_OVERRIDES` : on ne mélange jamais SB et BTPM dans un run.
+
+### Ajout 85.10Z (écoles maternelles)
+- `NAF_TO_ROME["85.10Z"] = ["K1202", "K1303"]` (Enseignement pré-primaire).
+- Ajouté à `PROFILS_SKY["sb_accueil_enfants"]` → `["88.91A", "84.11Z", "85.10Z"]`.
+
+### Tests de non-régression
+- **BTPM intact** : pour les 4 profils BTPM, `84.11Z` résout toujours `["K1404", "K1602"]` (mono-profil avec `profile_name` transmis ET fallback `None`). Aucun ROME petite enfance (K1202/K1303) ne fuite dans le BTPM.
+- **Override actif** : `sb_accueil_enfants` mono-profil → `84.11Z` → `["K1202", "K1303"]`, profil complet → `['G1202', 'K1202', 'K1303']`, aucun ROME admin (K1404/K1602).
+- **Fallback** : `84.11Z` sans `profile_name` → `["K1404", "K1602"]` (override bien désactivé).
+- **Warning multi-profil** : `[sb_accueil_enfants, btpm_batiment]` déclenche le warning ; `[btpm_batiment, btpm_electricite]` (pas d'override) → silencieux.
+- `py_compile` / import-safe : OK.
+
+### État final
+**Fonctionnel** ✅
